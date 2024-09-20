@@ -1,0 +1,67 @@
+#include <stdio.h>
+#include <sys/socket.h>
+#include <stdlib.h>
+#include <sys/un.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <errno.h>
+
+int main() {
+    
+    char *socket_path = "/tmp/unixSocket/unix.sock";
+    char *dir_path = "/tmp/unixSocket";
+
+    // Sjekk om katalogen eksisterer, og opprett den hvis den ikke gjør det
+    struct stat st = {0};
+    if (stat(dir_path, &st) == -1) {
+        if (mkdir(dir_path, 0777) == -1) {  // Gi alle rettigheter (rwx) til katalogen
+            perror("Error: could not create directory");
+            exit(EXIT_FAILURE);
+        }
+    }
+
+    // Gi alle rettigheter til katalogen for å være sikker
+    if (chmod(dir_path, 0777) == -1) {
+        perror("Error: could not chmod directory");
+        exit(EXIT_FAILURE);
+    }
+
+    struct sockaddr_un unix_socket_name;
+    int unix_connection_socket = socket(AF_UNIX, SOCK_DGRAM, 0);
+    if (unix_connection_socket == -1) {
+        perror("Error: could not create unix socket");
+        exit(EXIT_FAILURE);
+    }
+    
+    memset(&unix_socket_name, 0, sizeof(unix_socket_name));
+    unix_socket_name.sun_family = AF_UNIX;
+    strcpy(unix_socket_name.sun_path, socket_path);
+
+    int status = bind(unix_connection_socket, (const struct sockaddr *)&unix_socket_name, sizeof(unix_socket_name));
+    if (status == -1) {
+        perror("Error: could not bind unix socket");
+        close(unix_connection_socket);
+        exit(EXIT_FAILURE);
+    }
+
+    // Gi alle rettigheter til sokkelfilen
+    if (chmod(socket_path, 0666) == -1) {
+        perror("Error: could not chmod socket file");
+        close(unix_connection_socket);
+        exit(EXIT_FAILURE);
+    }
+
+    char buffer[256];
+    while (1) {
+        ssize_t bytes = recv(unix_connection_socket, buffer, sizeof(buffer) - 1, 0);
+        if (bytes > 0) {
+            buffer[bytes] = '\0';
+            printf("Mottok melding: %s\n", buffer);
+        }
+    }
+
+    close(unix_connection_socket);
+    unlink(socket_path);
+    return 0;
+}

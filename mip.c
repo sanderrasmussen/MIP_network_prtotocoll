@@ -1,52 +1,66 @@
+
+
 #include <stdio.h>
 #include <sys/socket.h>
+#include <stdlib.h>
 #include <sys/un.h>
+#include <sys/stat.h>
 
+
+/*  if(VARIBLE==-1){
+        fprintf(stderr, "Error: XXXX");
+        exit(-1);
+    }
+*/
 
 int main(){
 
-    char *socket_path ="/unixSocket/unix.sock"; //remember to null terminate
-    /* Creating Unic socket */
-    struct sockaddr_un unix_socket_name;
-    int unix_connection_socket = socket(AF_UNIX, SOCK_DGRAM, 0);
-    if(unix_connection_socket==-1){
-        fprintf(stderr, "Error: could not create unix socket");
+    /* global variables */
+    struct sockaddr_un address;
+    int status;
+    int unix_sockfd;
+    int unix_data_socket;
+    char buffer;
+    char *pathToSocket = "/unixSocket/unix.sock";
+
+    /* clearing structure */
+    memset(&address, 0 , sizeof(struct sockaddr_un));
+    unlink(pathToSocket);
+
+    /*create socket */
+    int unix_sockfd = socket(AF_UNIX, SOCK_STREAM,0);
+    if(unix_sockfd= -1){
+        fprint(stderr, "Error: could not create socket ");
         exit(-1);
-    }
+    };
 
-    /*
-    * For portability we clear the  structure
-    */
-    memset(&unix_socket_name, 0, sizeof(unix_socket_name));   
-
-    /* binding the unix socket to the name */
-    unix_socket_name.sun_family= AF_UNIX;
-    strcpy(unix_socket_name.sun_path, socket_path, sizeof(socket_path));
-
-    int status = bind(unix_connection_socket, (const struct sockaddr *) &unix_socket_name, sizeof(unix_socket_name));
-    if (status == -1){
-        fprintf(stderr, "Error: could not bind unix socket");
-        exit(1);
-    }
-    /* Listening with backlog of 0, meaning we will not accept any client to queue */
-    int status = listen(unix_connection_socket,0);
-    if (status==-1){
-        fprintf(stderr, "Error: could not listen on unix connection socket");
+    /*connect socket */
+    address.sun_family=AF_UNIX;
+    strncpy(address.sun_path, pathToSocket, sizeof(address.sun_path)-1);
+    /* Using umask to give file permissions*/
+    int mask =umask(pathToSocket);
+    status = bind(unix_sockfd, (struct sockaddr *) &address, sizeof(struct sockaddr_un));
+    if(status= -1){
+        fprint(stderr, "Error: could not bind socket ");
         exit(-1);
-    }
+    };
+    umask(mask);
 
-
- /* Wait for incoming connection. */
-
-    int data_socket = accept(unix_connection_socket, NULL, NULL);
-    if (data_socket == -1) {
-        perror("accept");
+    /* Opening listening for connections*/
+    status = listen(unix_sockfd,0);
+    if(status= -1){
+        fprint(stderr, "Error: could not listen on socket ");
         exit(-1);
-    }
+    };
 
-    /* Close socket */
-    close(data_socket);
-    unlink(unix_socket_name);
+    for(;;){
+        break;
+    }
+    close(unix_sockfd);
+    unlink(pathToSocket);
     exit(1);
+
 }
 
+
+  

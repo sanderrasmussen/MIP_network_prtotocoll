@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+
+
 /* In total this structure should only take 32 bits, hopefully*/
 typedef struct mip_header{
     uint8_t dest_addr : 8;
@@ -30,6 +32,11 @@ typedef struct mip_arp_message{
 /* mip arp message types */
 #define REQUEST 0x00
 #define RESPONSE 0x01
+
+
+//socket related stuff
+
+#define UNIX_SOCKET_PATH "/unixSocket/"
 
 void create_raw_socket();
 void create_unix_socket();
