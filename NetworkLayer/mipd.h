@@ -1,5 +1,5 @@
-#ifndef MIP_H_   /* Include guard */
-#define MIP_H_
+#ifndef MIPD_H_   /* Include guard */
+#define MIPD_H_
 
 #include <stdint.h>
 
@@ -19,7 +19,7 @@ which can be mip_arp og ping*/
 #define PING 0x02
 
 typedef struct mip_pdu{
-    mip_header mip_header;
+    struct mip_header mip_header;
     uint32_t sdu; //this is the payload, must be 32, divisible by 4. padding can be implemented in an upper layer protocol
 };
 
@@ -40,5 +40,7 @@ typedef struct mip_arp_message{
 
 void create_raw_socket();
 void create_unix_socket();
+
+
 
 #endif // MIP_H_
