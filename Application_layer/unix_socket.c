@@ -105,7 +105,7 @@ int unixSocket_connect(int unix_sockfd, char pathToSocket){
     umask(mask);
     return unix_data_socket;
 }
-int unixSocket_send(int unix_data_socket, char* payload, ){
+int unixSocket_send(int unix_data_socket, char* payload){
     int status = write(unix_data_socket,payload, sizeof(payload)+1);
     if (status == -1){
         perror("Error : unix socket write");
