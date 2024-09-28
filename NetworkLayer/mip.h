@@ -36,11 +36,5 @@ typedef struct mip_arp_message{
 
 //socket related stuff
 
-#define UNIX_SOCKET_PATH "/unixSocket/"
-
-void create_raw_socket();
-void create_unix_socket();
-
-
 
 #endif // MIP_H_
