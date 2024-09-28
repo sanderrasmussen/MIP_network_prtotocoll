@@ -92,7 +92,7 @@ int unixSocket_connect(int unix_sockfd, char *pathToSocket, struct sockaddr_un *
     return status;
 }   
 int unixSocket_send(int unix_data_socket, char* payload){
-    int status = write(unix_data_socket,payload, sizeof(payload)+1);
+    int status = write(unix_data_socket,payload, strlen(payload));
     if (status == -1){
         perror("Error : unix socket write");
         exit(EXIT_FAILURE);

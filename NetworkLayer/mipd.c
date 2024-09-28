@@ -1,4 +1,5 @@
 #define ETH_P_MIP 0x88B5
+#define MIP_ADDRESS 255
 
 #include <stdio.h>
 #include <sys/socket.h>
@@ -25,30 +26,29 @@
         exit(-1);
     }
 */
+int serve_connection(struct epoll_event *events,int sock_accept){
+    /* an already existing client is trying to send packets*/
+    char buffer[1024];
+    int rc;
+    //set all in buffer to 0
+    memset(buffer, 0, sizeof(buffer));
 
-int main(int argc, char *argv[]){ 
+    rc = read(events->data.fd, buffer, sizeof(buffer));
+    if (rc <= 0) {
+        close(events->data.fd);
+        printf("<%d> left the chat...\n", events->data.fd);
+        return -1;
+    }
+    printf("<%d>: %s\n", sock_accept, buffer);
+    return 1;
+};
 
-    int unix_connection_socket ;
-    int unix_data_socket;
+
+void handle_events(int unix_connection_socket){
     int status;
     struct epoll_event event, events[10];//10 is max events
     int epoll_socket;
     int sock_accept;
-
-    struct sockaddr_un *address = malloc(sizeof(struct sockaddr_un)) ;
-    if (address==NULL){
-        perror("could not malloc address");
-        exit(0);
-    }
-    char *pathToSocket = "/tmp/unix.sock";
-
-    unlink(pathToSocket);
-    char *buffer;
-    unix_connection_socket = setupUnixSocket(pathToSocket, address);
-
-    unix_data_socket = unixSocket_bind(unix_connection_socket, pathToSocket, address );
-
-    status = unixSocket_listen( unix_connection_socket, buffer, unix_data_socket);
 
     /* epoll file descriptor for event handlings */
 	epoll_socket = epoll_create1(0);
@@ -90,37 +90,36 @@ int main(int argc, char *argv[]){
             }
         }
         else{
-            /* an already existing client is trying to send packets*/
-            	char buf[256];
-            int rc;
-
-            /* The memset() function fills the first 'sizeof(buf)' bytes
-            * of the memory area pointed to by 'buf' with the constant byte 0.
-            */
-            memset(buf, 0, sizeof(buf));
-
-            /* read() attempts to read up to 'sizeof(buf)' bytes from file
-            * descriptor fd into the buffer starting at buf.
-            */
-            rc = read(events->data.fd, buf, sizeof(buf));
-            if (rc <= 0) {
-                close(events->data.fd);
-                printf("<%d> left the chat...\n", events->data.fd);
-                return -1;
-            }
-
-            printf("<%d>: %s\n", sock_accept, buf);
-
-                }
+            serve_connection(events, sock_accept);
+        }
     }
+}
+int main(int argc, char *argv[]){ 
 
+    int unix_connection_socket ;
+    int unix_data_socket;
+    int status;
+    struct sockaddr_un *address = malloc(sizeof(struct sockaddr_un)) ;
+    if (address==NULL){
+        perror("could not malloc address");
+        exit(0);
+    }
+    char *pathToSocket = "/tmp/unix.sock";
+
+    unlink(pathToSocket);
+    char *buffer;
+    unix_connection_socket = setupUnixSocket(pathToSocket, address);
+
+    unix_data_socket = unixSocket_bind(unix_connection_socket, pathToSocket, address );
+
+    status = unixSocket_listen( unix_connection_socket, buffer, unix_data_socket);
+    handle_events(unix_connection_socket);
 
     close(unix_connection_socket);
     close(unix_data_socket);
     unlink(pathToSocket);
     free(address);
     exit(1);
-
-}
-
+    return 1;
+};
 

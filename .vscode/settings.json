@@ -2,6 +2,7 @@
     "files.associations": {
         "socket.h": "c",
         "ifaddrs.h": "c",
-        "unix_socket.h": "c"
+        "unix_socket.h": "c",
+        "stdlib.h": "c"
     }
 }

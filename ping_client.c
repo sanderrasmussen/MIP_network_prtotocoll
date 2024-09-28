@@ -27,7 +27,7 @@ int main(int argc, char *argv[]){
     int unix_data_socket = setupUnixSocket(pathToSocket, address);
  
     unixSocket_connect(unix_data_socket, pathToSocket, address);
-    char *payload = "hello world";
+    char *payload = "hello world \0";
     unixSocket_send(unix_data_socket, payload);
     printf("message sendt");
     close(unix_data_socket);
