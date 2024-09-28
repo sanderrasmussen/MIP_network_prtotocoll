@@ -84,7 +84,7 @@ int unixSocket_listen(int unix_sockfd, char *pathToSocket, int unix_data_socket)
     exit(1);
 }
 //client function
-int unixSocket_connect(int unix_sockfd, char pathToSocket){
+int unixSocket_connect(int unix_sockfd, char *pathToSocket){
     struct sockaddr_un address;
     int status;
     int unix_data_socket;
@@ -97,7 +97,7 @@ int unixSocket_connect(int unix_sockfd, char pathToSocket){
     int mask =umask(pathToSocket);
     status = connect(unix_sockfd, (struct sockaddr *) &address, sizeof(struct sockaddr_un));
     if(status== -1){
-        fprintf(stderr, "Error: could not bind socket ");
+        fprintf(stderr, "Error: could not connect socket ");
         close(unix_sockfd);
         unlink(pathToSocket);
         exit(EXIT_FAILURE);
