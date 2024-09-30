@@ -23,29 +23,12 @@
 
 int main(int argc, char *argv[]){
 
-    int status;
-    /* testing raw socket, making sure it works*/
-
-    struct sockaddr_ll socket_name;
-    /* Setting up epollin variables*/
-    struct epoll_event event, events[MAX_EVENTS];
-    int epoll_fd;
-
-    char buffer[1024];
-
-
+    int raw_socket;
+    struct sockaddr_ll *socket_name;
+    char buffer[1024] ;
     int raw_socket = setupRawSocket();
-    if (raw_socket == -1){
-        perror("raw socket fail");
-        exit(EXIT_FAILURE);
-    }
-
-    //listen for connections
-    status = recv_raw_packet(raw_socket, buffer, 1024);
-
-
-
-
+    get_mac_from_interface(socket_name);
+    recv_raw_packet(raw_socket, buffer, 1024);
 
 
 

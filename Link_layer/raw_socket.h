@@ -31,4 +31,4 @@ int recv_raw_packet(int rawSocket, uint8_t *buffer, size_t length);
 int get_mac_from_interface(struct sockaddr_ll *socket_name);
 void print_mac_address(uint8_t *addr, size_t len);
 int raw_socket_listen();
-int send_arp();
+int send_arp(int raw_socket, struct sockaddr_ll *socket_name);
