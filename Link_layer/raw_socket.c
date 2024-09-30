@@ -10,6 +10,8 @@
 #include <net/ethernet.h>	/* ETH_* */
 #include <arpa/inet.h>	/* htons */
 #include <ifaddrs.h>	/* getifaddrs */
+#include "raw_socket.h"
+
 
 #define DST_MAC_ADDR {0x00, 0x00, 0x00, 0x00, 0x00, 0x02}
 
@@ -136,3 +138,38 @@ void print_mac_address(uint8_t *addr, size_t len)
 	}
 	printf("%d", addr[i]);
 }
+int send_arp(int raw_socket, struct sockaddr_ll *socket_name){
+
+    struct ether_frame ethernet_header;
+    struct msghdr *message_header;
+    struct iovec ioVector[1];
+    int status;
+
+    get_mac_from_interface(socket_name);
+
+    uint8_t destination_address[] = BROADCAST_ADDRESS;
+    uint8_t src_address[] =  socket_name->sll_addr;
+    //filling the ethernet header
+    memcpy(ethernet_header.dst_addr, destination_address, 6);
+    memcpy(ethernet_header.src_addr, src_address, 6);
+    ethernet_header.eth_proto[0] = ethernet_header.eth_proto[1] = ETH_P_MIP; 
+
+    ioVector[0].iov_base = &ethernet_header;
+    ioVector[0].iov_len = sizeof(struct ether_frame);
+
+    message_header = calloc(1, sizeof(struct msghdr));
+    message_header->msg_name = socket_name ;
+    message_header->msg_namelen = sizeof(struct sockaddr_ll);
+    message_header->msg_iov = ioVector;
+    message_header->msg_iovlen = 1;
+
+    status = sendmsg(raw_socket, message_header,0);
+    if (status==-1){
+        perror("Problems with send arp message");
+        free(message_header);
+        exit(EXIT_FAILURE);
+    }
+    free(message_header);
+    return 1;
+}
+

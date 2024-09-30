@@ -17,6 +17,11 @@
 #include <arpa/inet.h>	/* htons */
 #include <ifaddrs.h>	/* getifaddrs */
 
+struct mip_application_packet{
+    uint8_t dst_mip_addr;
+    char *message;
+};
+
     
 //struct sockaddr_un *address= malloc(sizeof(struct sockaddr_un));
 

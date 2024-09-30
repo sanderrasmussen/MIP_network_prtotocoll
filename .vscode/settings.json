@@ -3,6 +3,8 @@
         "socket.h": "c",
         "ifaddrs.h": "c",
         "unix_socket.h": "c",
-        "stdlib.h": "c"
+        "stdlib.h": "c",
+        "raw_socket.h": "c",
+        "if_packet.h": "c"
     }
 }

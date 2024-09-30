@@ -20,6 +20,7 @@
 #include <arpa/inet.h>	/* htons */
 #include <ifaddrs.h>	/* getifaddrs */
 #include "../Application_layer/unix_socket.h"
+#include "../Link_layer/raw_socket.h"
 
 /*  if(VARIBLE==-1){
         fprintf(stderr, "Error: XXXX");
@@ -44,7 +45,7 @@ int serve_connection(struct epoll_event *events,int sock_accept){
 };
 
 
-void handle_events(int unix_connection_socket){
+void handle_events(int socket){
     int status;
     struct epoll_event event, events[10];//10 is max events
     int epoll_socket;
@@ -54,12 +55,12 @@ void handle_events(int unix_connection_socket){
 	epoll_socket = epoll_create1(0);
 	if (epoll_socket == -1) {
 		perror("epoll_create1");
-		close(unix_connection_socket );
+		close(socket );
 		exit(EXIT_FAILURE);
 	}
 
     //adding the connection coket to table 
-    status= add_to_epoll_table(epoll_socket, &event, unix_connection_socket);
+    status= add_to_epoll_table(epoll_socket, &event,socket);
     if(status==-1){
         perror("add to epoll table failed");
         exit(EXIT_FAILURE);
@@ -69,11 +70,11 @@ void handle_events(int unix_connection_socket){
         status= epoll_wait(epoll_socket, events, 10, -1);
         if (status==-1){
             perror("epoll wait error");
-            close(unix_connection_socket);
+            close(socket);
             exit(EXIT_FAILURE);
         }
         /* If someone is trying to connect*/
-        if (events->data.fd == unix_connection_socket){
+        if (events->data.fd == socket){
             sock_accept= accept(events->data.fd,NULL,NULL);
             if (sock_accept== -1){
                 perror("error on accept connection");
@@ -84,7 +85,7 @@ void handle_events(int unix_connection_socket){
 
             status = add_to_epoll_table(epoll_socket, &event , sock_accept);
             if (status== -1){
-                close(unix_connection_socket);
+                close(socket);
                 perror("add to epoll table error");
                 exit(EXIT_FAILURE);
             }
@@ -109,11 +110,19 @@ int main(int argc, char *argv[]){
     unlink(pathToSocket);
     char *buffer;
     unix_connection_socket = setupUnixSocket(pathToSocket, address);
-
     unix_data_socket = unixSocket_bind(unix_connection_socket, pathToSocket, address );
-
     status = unixSocket_listen( unix_connection_socket, buffer, unix_data_socket);
+
+    int raw_socket = setupRawSocket();
+
+    /* get interface and mac address */
+    
+
     handle_events(unix_connection_socket);
+
+
+
+
 
     close(unix_connection_socket);
     close(unix_data_socket);
@@ -122,4 +131,12 @@ int main(int argc, char *argv[]){
     exit(1);
     return 1;
 };
+
+//raw mip ethernet communication
+
+struct mip_pdu* create_mip_datagram(){
+    //fill mip header
+    struct mip_header * header = malloc(sizeof(struct mip_header));
+
+}
 
