@@ -52,7 +52,7 @@ int main(int argc, char *argv[]){
     int unix_data_socket = setupUnixSocket(unix_socket_path, address);
  
     unixSocket_connect(unix_data_socket, unix_socket_path, address);
-    unixSocket_send(unix_data_socket, packet);
+    unixSocket_send(unix_data_socket, message);
     printf("message sendt");
     close(unix_data_socket);
 

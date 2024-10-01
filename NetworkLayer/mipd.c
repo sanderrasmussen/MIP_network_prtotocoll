@@ -99,6 +99,10 @@ int main(int argc, char *argv[]){
 
     int raw_socket;
     struct sockaddr_ll *socket_name;
+    raw_socket = setupRawSocket();
+    get_mac_from_interface(socket_name);
+    send_arp(raw_socket, socket_name); //this one will be in handle events later, currenntly here for testing
+
 
     int unix_connection_socket ;
     int unix_data_socket;
@@ -116,10 +120,7 @@ int main(int argc, char *argv[]){
     unix_data_socket = unixSocket_bind(unix_connection_socket, pathToSocket, address );
     status = unixSocket_listen( unix_connection_socket, buffer, unix_data_socket);
 
-    int raw_socket = setupRawSocket();
-    get_mac_from_interface(socket_name);
-    send_arp(raw_socket, socket_name); //this one will be in handle events later, currenntly here for testing
-
+ 
     /* get interface and mac address */
 
 

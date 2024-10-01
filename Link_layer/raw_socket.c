@@ -16,14 +16,40 @@
 #define DST_MAC_ADDR {0x00, 0x00, 0x00, 0x00, 0x00, 0x02}
 
 #define ETH_P_MIP 0x88B5
-int status;
 
-struct ether_frame {
-	uint8_t dst_addr[6];
-	uint8_t src_addr[6];
-	uint8_t eth_proto[2];
-	uint8_t contents[0];
-} __attribute__((packed));
+void print_mac_addr(uint8_t *addr, size_t len)
+{
+	size_t i;
+
+	for (i = 0; i < len - 1; i++) {
+		printf("%02x:", addr[i]);
+	}
+	printf("%02x\n", addr[i]);
+}
+
+/*here we loop through all the interfaces looking for an interface with*/
+int get_mac_from_interface(struct sockaddr_ll *socket_name){
+    struct ifaddrs *interfaces, *interfaceIterator;
+    /* Store interfaces in linkedlist with head being interfaces pointer*/
+    if(getifaddrs(&interfaces)){
+        perror("getifaddrs");
+        exit(EXIT_FAILURE);
+    }
+    /* iterate throug the linkedList*/
+    for (interfaceIterator = interfaces; interfaceIterator!=NULL; interfaceIterator->ifa_next){
+
+        /*checking that the interface address is not null*/
+        if(interfaceIterator->ifa_addr != NULL && interfaceIterator->ifa_addr->sa_family==AF_PACKET && (strcmp("lo",interfaceIterator->ifa_name))){
+            /* now we copy the mac address into the interfaceIterator*/
+            memcpy(socket_name, (struct sockaddr_ll*)interfaceIterator->ifa_addr, sizeof(struct sockaddr_ll));
+            print_mac_addr(socket_name->sll_addr, 6);
+        }
+        /* now we hopefully have the mack addres stored in socket_name*/
+    }
+    freeifaddrs(interfaces);
+
+    return 1;
+}
 
 /* creates and returns a raw socket */
 int setupRawSocket(){
@@ -50,7 +76,9 @@ int send_raw_packet(int rawSocket, struct sockaddr_ll *socket_name, uint8_t *pay
     uint8_t destinations_mac_address[]= DST_MAC_ADDR;
     memcpy(ether_frame_header.dst_addr, destinations_mac_address, 6);
     memcpy(ether_frame_header.src_addr, socket_name->sll_addr, 6);
-    ether_frame_header.eth_proto[0] =ETH_P_MIP; //using the mip protocoll
+ether_frame_header.eth_proto[0] = (ETH_P_MIP >> 8) & 0xFF;  // Høybyte
+ether_frame_header.eth_proto[1] = ETH_P_MIP & 0xFF;         // Lavbyte
+
 
     /* fill out iovec with ethrenet frame and payload*/
     //frame
@@ -67,7 +95,7 @@ int send_raw_packet(int rawSocket, struct sockaddr_ll *socket_name, uint8_t *pay
     message->msg_iov = msgvec;
     message->msg_iovlen =2;//only ether frame and payload
 
-    printf("sending message from dst address: %d",socket_name->sll_addr);
+    printf("sending message ");
     /* now everything should be filled out and we can send the message, which contains everything above*/
     status= sendmsg(rawSocket, message, 0);
     if (status==-1){
@@ -107,55 +135,29 @@ int recv_raw_packet(int rawSocket, uint8_t *buffer, size_t length){
     return status;
 }
 
-/*here we loop through all the interfaces looking for an interface with*/
-int get_mac_from_interface(struct sockaddr_ll *socket_name){
-    struct ifaddrs *interfaces, *interfaceIterator;
-    /* Store interfaces in linkedlist with head being interfaces pointer*/
-    if(getifaddrs(&interfaces)){
-        perror("getifaddrs");
-        exit(EXIT_FAILURE);
-    }
-    /* iterate throug the linkedList*/
-    for (interfaceIterator = interfaces; interfaceIterator!=NULL; interfaceIterator->ifa_next){
 
-        /*checking that the interface address is not null*/
-        if(interfaceIterator->ifa_addr != NULL && interfaceIterator->ifa_addr->sa_family==AF_PACKET && (strcmp("lo",interfaceIterator->ifa_name))){
-            /* now we copy the mac address into the interfaceIterator*/
-            memcpy(socket_name, (struct sockaddr_ll*)interfaceIterator->ifa_addr, sizeof(struct sockaddr_ll));
-        }
-        /* now we hopefully have the mack addres stored in socket_name*/
-    }
-    freeifaddrs(interfaces);
-
-    return 1;
-}
-void print_mac_address(uint8_t *addr, size_t len)
-{
-	int i;
-
-	for (i = 0; i < len - 1; i++) {
-		printf("%d:", addr[i]);
-	}
-	printf("%d", addr[i]);
-}
 int send_arp(int raw_socket, struct sockaddr_ll *socket_name){
 
     struct ether_frame ethernet_header;
     struct msghdr *message_header;
     struct iovec ioVector[1];
     int status;
-
+    char *message= "test";
     get_mac_from_interface(socket_name);
 
     uint8_t destination_address[] = BROADCAST_ADDRESS;
-    uint8_t src_address[] =  socket_name->sll_addr;
+
     //filling the ethernet header
     memcpy(ethernet_header.dst_addr, destination_address, 6);
-    memcpy(ethernet_header.src_addr, src_address, 6);
-    ethernet_header.eth_proto[0] = ethernet_header.eth_proto[1] = ETH_P_MIP; 
+    memcpy(ethernet_header.src_addr, socket_name->sll_addr, 6);
+        // Korrekt tilordning av protokollverdi
+    ethernet_header.eth_proto[0] = (ETH_P_MIP >> 8) & 0xFF; // Høybyte
+    ethernet_header.eth_proto[1] = ETH_P_MIP & 0xFF;        // Lavbyte
 
     ioVector[0].iov_base = &ethernet_header;
     ioVector[0].iov_len = sizeof(struct ether_frame);
+    ioVector[1].iov_base = message;
+    ioVector[1].iov_len = sizeof(message);
 
     message_header = calloc(1, sizeof(struct msghdr));
     message_header->msg_name = socket_name ;
