@@ -96,44 +96,17 @@ void handle_events(int socket){
     }
 }
 int main(int argc, char *argv[]){ 
-
     int raw_socket;
-    struct sockaddr_ll *socket_name;
     raw_socket = setupRawSocket();
+    struct sockaddr_ll *socket_name=malloc(sizeof(struct sockaddr_ll));
+
     get_mac_from_interface(socket_name);
     send_arp(raw_socket, socket_name); //this one will be in handle events later, currenntly here for testing
 
 
-    int unix_connection_socket ;
-    int unix_data_socket;
-    int status;
-    struct sockaddr_un *address = malloc(sizeof(struct sockaddr_un)) ;
-    if (address==NULL){
-        perror("could not malloc address");
-        exit(0);
-    }
-    char *pathToSocket = "/tmp/unix.sock";
-
-    unlink(pathToSocket);
-    char *buffer;
-    unix_connection_socket = setupUnixSocket(pathToSocket, address);
-    unix_data_socket = unixSocket_bind(unix_connection_socket, pathToSocket, address );
-    status = unixSocket_listen( unix_connection_socket, buffer, unix_data_socket);
-
  
-    /* get interface and mac address */
-
-
-    handle_events(unix_connection_socket);
-
-
-
-
-
-    close(unix_connection_socket);
-    close(unix_data_socket);
-    unlink(pathToSocket);
-    free(address);
+    close(raw_socket);
+ 
     exit(1);
     return 1;
 };

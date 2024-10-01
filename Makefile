@@ -1,6 +1,6 @@
-CC 		= gcc
-CFLAGS 	= -g
-RM 		= rm -f
+CC      = gcc
+CFLAGS  = -g -Wall -Wextra
+RM      = rm -f
 
 default: all
 
@@ -25,10 +25,5 @@ ping_client.o: ping_client.c
 	$(CC) $(CFLAGS) -c ping_client.c -o ping_client.o
 
 clean:
-	$(RM) NetworkLayer/mipd.o Application_layer/unix_socket.o mipd
-	$(RM) ping_client.o Application_layer/unix_socket.o ping_client
-
-
-veryclean: clean
-
-.PHONY: clean veryclean all default
+	$(RM) NetworkLayer/mipd.o Application_layer/unix_socket.o Link_layer/raw_socket.o mipd
+	$(RM) ping_client.o ping_client

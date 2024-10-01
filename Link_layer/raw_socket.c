@@ -36,7 +36,7 @@ int get_mac_from_interface(struct sockaddr_ll *socket_name){
         exit(EXIT_FAILURE);
     }
     /* iterate throug the linkedList*/
-    for (interfaceIterator = interfaces; interfaceIterator!=NULL; interfaceIterator->ifa_next){
+    for (interfaceIterator = interfaces; interfaceIterator!=NULL; interfaceIterator = interfaceIterator->ifa_next){
 
         /*checking that the interface address is not null*/
         if(interfaceIterator->ifa_addr != NULL && interfaceIterator->ifa_addr->sa_family==AF_PACKET && (strcmp("lo",interfaceIterator->ifa_name))){
@@ -53,11 +53,10 @@ int get_mac_from_interface(struct sockaddr_ll *socket_name){
 
 /* creates and returns a raw socket */
 int setupRawSocket(){
-    int status;
-    int raw_sockfd=(AF_PACKET , SOCK_RAW, htons(ETH_P_MIP)); //all protocols
+
+    int raw_sockfd=socket(AF_PACKET , SOCK_RAW, htons(ETH_P_MIP)); //all protocols
     if(raw_sockfd == -1){
         fprintf(stderr, "Error: could not create raw socket ");
-        close(raw_sockfd);
         exit(EXIT_FAILURE);
     }
 
@@ -140,9 +139,9 @@ int send_arp(int raw_socket, struct sockaddr_ll *socket_name){
 
     struct ether_frame ethernet_header;
     struct msghdr *message_header;
-    struct iovec ioVector[1];
+    struct iovec ioVector[2];
     int status;
-    char *message= "test";
+
     get_mac_from_interface(socket_name);
 
     uint8_t destination_address[] = BROADCAST_ADDRESS;
@@ -156,21 +155,21 @@ int send_arp(int raw_socket, struct sockaddr_ll *socket_name){
 
     ioVector[0].iov_base = &ethernet_header;
     ioVector[0].iov_len = sizeof(struct ether_frame);
-    ioVector[1].iov_base = message;
-    ioVector[1].iov_len = sizeof(message);
 
+    
     message_header = calloc(1, sizeof(struct msghdr));
     message_header->msg_name = socket_name ;
     message_header->msg_namelen = sizeof(struct sockaddr_ll);
     message_header->msg_iov = ioVector;
     message_header->msg_iovlen = 1;
-
+    printf("sending arp");
     status = sendmsg(raw_socket, message_header,0);
     if (status==-1){
         perror("Problems with send arp message");
         free(message_header);
         exit(EXIT_FAILURE);
     }
+    printf("arp is sent");
     free(message_header);
     return 1;
 }
