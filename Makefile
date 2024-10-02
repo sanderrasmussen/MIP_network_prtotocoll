@@ -4,7 +4,13 @@ RM      = rm -f
 
 default: all
 
-all: mipd ping_client
+all: mipd ping_client mipdtest
+
+mipdtest: mipdtest.o unix_socket.o raw_socket.o
+	$(CC) $(CFLAGS) -o mipdtest NetworkLayer/mipdtest.o Application_layer/unix_socket.o Link_layer/raw_socket.o
+
+mipdtest.o: NetworkLayer/mipdtest.c
+	$(CC) $(CFLAGS) -c NetworkLayer/mipdtest.c -o NetworkLayer/mipdtest.o
 
 mipd: mipd.o unix_socket.o raw_socket.o
 	$(CC) $(CFLAGS) -o mipd NetworkLayer/mipd.o Application_layer/unix_socket.o Link_layer/raw_socket.o
@@ -27,3 +33,5 @@ ping_client.o: ping_client.c
 clean:
 	$(RM) NetworkLayer/mipd.o Application_layer/unix_socket.o Link_layer/raw_socket.o mipd
 	$(RM) ping_client.o ping_client
+	$(RM) NetworkLayer/mipdtest.o Application_layer/unix_socket.o Link_layer/raw_socket.o mipd
+

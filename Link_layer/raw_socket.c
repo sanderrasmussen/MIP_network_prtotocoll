@@ -53,8 +53,8 @@ int get_mac_from_interface(struct sockaddr_ll *socket_name){
 
 /* creates and returns a raw socket */
 int setupRawSocket(){
-
-    int raw_sockfd=socket(AF_PACKET , SOCK_RAW, htons(ETH_P_MIP)); //all protocols
+    short unsigned int mip = 0x88B5;
+    int raw_sockfd=socket(AF_PACKET , SOCK_RAW, htons(mip)); //all protocols
     if(raw_sockfd == -1){
         fprintf(stderr, "Error: could not create raw socket ");
         exit(EXIT_FAILURE);
@@ -75,7 +75,7 @@ int send_raw_packet(int rawSocket, struct sockaddr_ll *socket_name, uint8_t *pay
     uint8_t destinations_mac_address[]= DST_MAC_ADDR;
     memcpy(ether_frame_header.dst_addr, destinations_mac_address, 6);
     memcpy(ether_frame_header.src_addr, socket_name->sll_addr, 6);
-ether_frame_header.eth_proto[0] = (ETH_P_MIP >> 8) & 0xFF;  // Høybyte
+    ether_frame_header.eth_proto[0] = (ETH_P_MIP >> 8) & 0xFF;  // Høybyte
 ether_frame_header.eth_proto[1] = ETH_P_MIP & 0xFF;         // Lavbyte
 
 
@@ -113,24 +113,42 @@ int recv_raw_packet(int rawSocket, uint8_t *buffer, size_t length){
     struct msghdr message;
     struct iovec msgvec[2];
 
-    //setting up structure for saving incomming packets into our own structs
-    msgvec[0].iov_base=&ethernet_frame_header;
-    msgvec[0].iov_len = sizeof(struct ether_frame );
+    // Nullstill strukturen for å unngå uønskede verdier
+    memset(&socket_name, 0, sizeof(struct sockaddr_ll));
+    memset(&ethernet_frame_header, 0, sizeof(struct ether_frame));
+
+    // Setting up structure for saving incoming packets into our own structs
+    msgvec[0].iov_base = &ethernet_frame_header;
+    msgvec[0].iov_len = sizeof(struct ether_frame);
     msgvec[1].iov_base = buffer;
     msgvec[1].iov_len = length;
 
-    message.msg_name= &socket_name;
-    message.msg_namelen= sizeof(struct sockaddr_ll);
-    message.msg_iovlen = 2;
+    message.msg_name = &socket_name;
+    message.msg_namelen = sizeof(struct sockaddr_ll);
     message.msg_iov = msgvec;
+    message.msg_iovlen = 2;
 
-    status = recvmsg(rawSocket, &message,0 );
-    if (status==-1){
-        perror("could not receive raw socket message");
-        exit(1); 
+    printf("Listening for packet\n");
+
+    // Receive the raw packet
+    status = recvmsg(rawSocket, &message, 0);
+    if (status == -1) {
+        perror("Could not receive raw socket message");
+        return -1;  // Avoid exiting, return error code instead
     }
 
-    print_mac_addr(ethernet_frame_header.src_addr, 6);
+    printf("Packet received\n");
+    print_mac_addr(ethernet_frame_header.src_addr, 6);  // Print source MAC address
+
+    // Validate protocol (ethertype) to ensure it's a MIP packet (0x88B5)
+    uint16_t eth_proto = (ethernet_frame_header.eth_proto[0] << 8) | ethernet_frame_header.eth_proto[1];
+    if (eth_proto != ETH_P_MIP) {
+        printf("Received packet with unknown ethertype: 0x%04x\n", eth_proto);
+        return -1;
+    }
+
+    printf("Received MIP packet\n");
+
     return status;
 }
 
@@ -157,7 +175,8 @@ int send_arp(int raw_socket, struct sockaddr_ll *socket_name){
     ioVector[0].iov_len = sizeof(struct ether_frame);
 
     
-    message_header = calloc(1, sizeof(struct msghdr));
+    message_header = (struct msghdr *)calloc(1, sizeof(struct msghdr));
+
     message_header->msg_name = socket_name ;
     message_header->msg_namelen = sizeof(struct sockaddr_ll);
     message_header->msg_iov = ioVector;

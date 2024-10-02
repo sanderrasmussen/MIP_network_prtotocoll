@@ -96,17 +96,15 @@ void handle_events(int socket){
     }
 }
 int main(int argc, char *argv[]){ 
-    int raw_socket;
-    raw_socket = setupRawSocket();
-    struct sockaddr_ll *socket_name=malloc(sizeof(struct sockaddr_ll));
 
+    int raw_socket;
+    struct sockaddr_ll *socket_name=malloc(sizeof(struct sockaddr_ll));
+    raw_socket = setupRawSocket();
     get_mac_from_interface(socket_name);
     send_arp(raw_socket, socket_name); //this one will be in handle events later, currenntly here for testing
 
 
- 
-    close(raw_socket);
- 
+
     exit(1);
     return 1;
 };
@@ -118,4 +116,3 @@ struct mip_pdu* create_mip_datagram(){
     struct mip_header * header = malloc(sizeof(struct mip_header));
 
 }
-
