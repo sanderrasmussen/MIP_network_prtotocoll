@@ -54,7 +54,7 @@ int get_mac_from_interface(struct sockaddr_ll *socket_name){
 /* creates and returns a raw socket */
 int setupRawSocket(){
     short unsigned int mip = 0x88B5;
-    int raw_sockfd=socket(AF_PACKET , SOCK_RAW, htons(ETH_P_MIP)); //all protocols
+    int raw_sockfd=socket(AF_PACKET , SOCK_RAW, htons(mip)); //all protocols
     if(raw_sockfd == -1){
         fprintf(stderr, "Error: could not create raw socket ");
         exit(EXIT_FAILURE);

@@ -1,0 +1,18 @@
+Raw sockets må testes på nrec med mininet. Per nå fungerer broadcasting, men disse kommandoene må kjøres:
+
+start mininet:
+sudo -E mn --custom he1-mn-topo.py --topo he1 --link tc --x
+
+gi raw sockets permissions inne i mininet noden fra mininet terminal
+B sudo setcap cap_net_raw+ep ./mipdtest
+
+kjør program i node B fra bakgrunnen:
+B sudo ./mipdtest &
+
+kjør program fra A
+A sudo ./mipd
+
+hent program B frem i terminalen igjen:
+B fg
+
+
