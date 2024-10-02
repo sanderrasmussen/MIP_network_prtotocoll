@@ -17,9 +17,9 @@
 #include <arpa/inet.h>	/* htons */
 #include <ifaddrs.h>	/* getifaddrs */
 
-struct mip_application_packet{
+struct mip_client_packet{
     uint8_t dst_mip_addr;
-    char *message;
+    char message[1024];
 };
 
     
@@ -31,7 +31,7 @@ int unixSocket_bind(int unix_sockfd, char *pathToSocket, struct sockaddr_un *add
 //server function
 int unixSocket_listen(int unix_sockfd, char *pathToSocket, int unix_data_socket);
 int unixSocket_connect(int unix_sockfd, char *pathToSocket, struct sockaddr_un *addresss );
-int unixSocket_send(int unix_data_socket, char* payload);
+int unixSocket_send(int unix_data_socket, struct mip_client_packet* payload);
 int unixSocket_recieve(int unix_data_socket, char *buffer);
 int close_unix_socket(int socket, char *socketname);
 int add_to_epoll_table(int epoll_socket, struct epoll_event *event, int socket);

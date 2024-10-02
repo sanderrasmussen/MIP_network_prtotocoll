@@ -27,26 +27,40 @@
         exit(-1);
     }
 */
-int serve_connection(struct epoll_event *events,int sock_accept){
-    /* an already existing client is trying to send packets*/
+int serve_raw_connection( int raw_socket){
     char buffer[1024];
+    recv_raw_packet(raw_socket,buffer, 1024);
+
+}
+int serve_unix_connection(struct epoll_event *events,int sock_accept, int raw_socket, struct sockaddr_ll *socket_name){
+    /* an already existing client is trying to send packets*/
+    struct mip_client_packet *buffer=malloc(sizeof(struct mip_client_packet));
     int rc;
     //set all in buffer to 0
-    memset(buffer, 0, sizeof(buffer));
-
-    rc = read(events->data.fd, buffer, sizeof(buffer));
-    if (rc <= 0) {
+    //memset(buffer, 0, sizeof(buffer)); THIS CAUSES SEGFAULT
+    
+    /* when receiving from client, it is only to be forwarded, we check cahce, if no mac we send arp*/
+    rc = read(events->data.fd, buffer, sizeof(struct mip_client_packet));
+    if (rc == -1) {
         close(events->data.fd);
         printf("<%d> left the chat...\n", events->data.fd);
         return -1;
     }
-    printf("<%d>: %s\n", sock_accept, buffer);
+    //unpack unix socket message
+    printf("\n");
+    printf("===mip address: %d", buffer->dst_mip_addr );
+    printf("message: %s ===", buffer->message);
+    send_arp(raw_socket,socket_name);
+    printf("\n");
+    close(events->data.fd);
+    
+  
     return 1;
 };
 
 
-void handle_events(int socket){
-    int status;
+void handle_events(int socket,int raw_socket, struct sockaddr_ll *socket_name){
+    int status, readyIOs;
     struct epoll_event event, events[10];//10 is max events
     int epoll_socket;
     int sock_accept;
@@ -65,33 +79,47 @@ void handle_events(int socket){
         perror("add to epoll table failed");
         exit(EXIT_FAILURE);
     }
+    //adding the raw socket to table
+    status = add_to_epoll_table(epoll_socket, &event, raw_socket);
+    if(status==-1){
+        perror("adding raw socket to epol table");
+        exit(EXIT_FAILURE);
+    }
     
     for(;;){
-        status= epoll_wait(epoll_socket, events, 10, -1);
+        readyIOs= epoll_wait(epoll_socket, events, 10, -1);
         if (status==-1){
             perror("epoll wait error");
             close(socket);
             exit(EXIT_FAILURE);
         }
-        /* If someone is trying to connect*/
-        if (events->data.fd == socket){
-            sock_accept= accept(events->data.fd,NULL,NULL);
-            if (sock_accept== -1){
-                perror("error on accept connection");
-                continue;
-            }
+        for(int i = 0; i<readyIOs; i++){
 
-            printf("client connected");
+            /* If someone is trying to connect to unix socket*/
+            if (events[i].data.fd == socket){
+                sock_accept= accept(events->data.fd,NULL,NULL);
+                if (sock_accept== -1){
+                    perror("error on accept connection");
+                    continue;
+                }
 
-            status = add_to_epoll_table(epoll_socket, &event , sock_accept);
-            if (status== -1){
-                close(socket);
-                perror("add to epoll table error");
-                exit(EXIT_FAILURE);
+                printf("client connected");
+
+                status = add_to_epoll_table(epoll_socket, &event , sock_accept);
+                if (status== -1){
+                    close(socket);
+                    perror("add to epoll table error");
+                    exit(EXIT_FAILURE);
+                }
             }
-        }
-        else{
-            serve_connection(events, sock_accept);
+            //handle raw socket connections, like arp broadcasts and so on
+            else if(events[i].data.fd== raw_socket){
+                serve_raw_connection(events[i].data.fd);
+            }
+            //someone is connected to unix socket and wants to send data
+            else{
+                serve_unix_connection(events, sock_accept, raw_socket, socket_name);
+            }
         }
     }
 }
@@ -101,10 +129,31 @@ int main(int argc, char *argv[]){
     struct sockaddr_ll *socket_name=malloc(sizeof(struct sockaddr_ll));
     raw_socket = setupRawSocket();
     get_mac_from_interface(socket_name);
-    send_arp(raw_socket, socket_name); //this one will be in handle events later, currenntly here for testing
+    //send_arp(raw_socket, socket_name); //this one will be in handle events later, currenntly here for testing
 
+    int unix_connection_socket ;
+    int unix_data_socket;
+    int status;
+    struct sockaddr_un *address = malloc(sizeof(struct sockaddr_un)) ;
+    if (address==NULL){
+        perror("could not malloc address");
+        exit(0);
+    }
+    char *pathToSocket = "/tmp/unix.sock";
 
+    unlink(pathToSocket);
+    char *buffer;
+    unix_connection_socket = setupUnixSocket(pathToSocket, address);
+    unix_data_socket = unixSocket_bind(unix_connection_socket, pathToSocket, address );
+    status = unixSocket_listen( unix_connection_socket, buffer, unix_data_socket);
 
+    handle_events(unix_connection_socket,raw_socket, socket_name);
+
+    close(raw_socket);
+    close(unix_connection_socket);
+    close(unix_data_socket);
+    unlink(pathToSocket);
+    free(address);
     exit(1);
     return 1;
 };

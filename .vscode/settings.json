@@ -5,6 +5,7 @@
         "unix_socket.h": "c",
         "stdlib.h": "c",
         "raw_socket.h": "c",
-        "if_packet.h": "c"
+        "if_packet.h": "c",
+        "inet.h": "c"
     }
 }

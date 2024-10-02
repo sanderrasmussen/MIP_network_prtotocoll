@@ -25,26 +25,26 @@ int main(int argc, char *argv[]){
     /*reading command line arguments, if len is 3 then -h option is not present */
     char *unix_socket_path ;
     uint8_t dst_mip_addr;
-    char *message;
+    char *message = malloc(sizeof(char)*1024);
     uint8_t arg;
     uint8_t h_option ;
-    struct mip_application_packet *packet = malloc(sizeof(struct mip_application_packet));
+    struct mip_client_packet *packet = malloc(sizeof(struct mip_client_packet));
 
     if (argc == 4){
         unix_socket_path = argv[1];
-        dst_mip_addr = argv[2];
+        dst_mip_addr = (uint8_t)atoi(argv[2]);
         message = argv[3];
     }
     //h option flag is passed
     else{
         h_option = argv[1];
         unix_socket_path = argv[2];
-        dst_mip_addr = argv[3];
+        dst_mip_addr = (uint8_t)atoi(argv[3]);
         message = argv[4];
     }
 
     packet->dst_mip_addr=dst_mip_addr;
-    packet->message = message;
+    strcpy(packet->message, message);
 
 
     struct sockaddr_un *address= malloc(sizeof(struct sockaddr_un));
@@ -52,9 +52,12 @@ int main(int argc, char *argv[]){
     int unix_data_socket = setupUnixSocket(unix_socket_path, address);
  
     unixSocket_connect(unix_data_socket, unix_socket_path, address);
-    unixSocket_send(unix_data_socket, message);
-    printf("message sendt");
+    unixSocket_send(unix_data_socket, packet);
+    printf("message %s sendt", packet->message);
+    printf("dst address : %u ", packet->dst_mip_addr);
     close(unix_data_socket);
+    
+    
 
     exit(0);
 

@@ -40,7 +40,7 @@ int main(int argc, char *argv[])
 	/* Walk through all interfaces of the node and store their addresses */
     get_mac_from_interface(socket_name);
 
-    rc = recv_raw_packet(raw_sock,buffer,100 );
+    
 	
 
 	close(raw_sock);
