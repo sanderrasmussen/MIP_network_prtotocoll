@@ -1,6 +1,6 @@
 #ifndef MIPD_H_   /* Include guard */
 #define MIPD_H_
-
+#define SDU_LENGTH 
 #include <stdint.h>
 
 
@@ -9,7 +9,7 @@
 typedef struct mip_header{
     uint8_t dest_addr : 8;
     uint8_t src_addr : 8;
-    uint8_t ttl : 4; // recomended to be set to value of 1
+    uint8_t ttl : 4; // recomended to be set to value of 1 
     uint16_t sdu_len : 9;
     uint8_t sdu_type : 3;   
 }__attribute__((packed));
@@ -32,6 +32,8 @@ typedef struct mip_arp_message{
 /* mip arp message types */
 #define REQUEST 0x00
 #define RESPONSE 0x01
+
+
 
 
 //socket related stuff

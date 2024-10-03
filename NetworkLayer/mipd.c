@@ -54,7 +54,6 @@ int serve_unix_connection(struct epoll_event *events,int sock_accept, int raw_so
     printf("\n");
     close(events->data.fd);
     
-  
     return 1;
 };
 
@@ -85,7 +84,6 @@ void handle_events(int socket,int raw_socket, struct sockaddr_ll *socket_name){
         perror("adding raw socket to epol table");
         exit(EXIT_FAILURE);
     }
-    
     for(;;){
         readyIOs= epoll_wait(epoll_socket, events, 10, -1);
         if (status==-1){
@@ -176,5 +174,12 @@ struct mip_pdu* create_mip_datagram(struct mip_client_packet *client_packet, uin
     memcpy(mip_pdu->sdu, client_packet->message, header->sdu_len);
 
     return mip_pdu;
+
+}
+//to be implemented.
+int get_mac_from_cache(uint8_t mip_address){
+    return -1;
+}
+int add_to_cache(uint8_t mip_address, uint8_t mac_address ){
 
 }
