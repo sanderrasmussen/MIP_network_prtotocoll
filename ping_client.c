@@ -18,34 +18,31 @@
 #include <ifaddrs.h>	/* getifaddrs */
 #include "Application_layer/unix_socket.h"
 
-
-
 int main(int argc, char *argv[]){
 
     /*reading command line arguments, if len is 3 then -h option is not present */
     char *unix_socket_path ;
     uint8_t dst_mip_addr;
-    char *message = malloc(sizeof(char)*1024);
     uint8_t arg;
     uint8_t h_option ;
     struct mip_client_packet *packet = malloc(sizeof(struct mip_client_packet));
+    
 
     if (argc == 4){
         unix_socket_path = argv[1];
-        dst_mip_addr = (uint8_t)atoi(argv[2]);
-        message = argv[3];
+        packet->dst_mip_addr = (uint8_t)atoi(argv[2]);
+        packet->message = malloc(strlen(argv[3])+1);
+        strcpy(packet->message, argv[3] );
     }
     //h option flag is passed
     else{
         h_option = argv[1];
         unix_socket_path = argv[2];
-        dst_mip_addr = (uint8_t)atoi(argv[3]);
-        message = argv[4];
+        packet->dst_mip_addr = (uint8_t)atoi(argv[3]);
+        packet->message = malloc(strlen(argv[4])+1);
+        strcpy(packet->message, argv[4] );
     }
-
-    packet->dst_mip_addr=dst_mip_addr;
-    strcpy(packet->message, message);
-
+    add_padding_to_sdu(packet);
 
     struct sockaddr_un *address= malloc(sizeof(struct sockaddr_un));
     //testing that unix socket is porperly set up
@@ -57,9 +54,34 @@ int main(int argc, char *argv[]){
     printf("dst address : %u ", packet->dst_mip_addr);
     close(unix_data_socket);
     
-    
+    free(packet );
+    free(address);
+    free(packet->message);
+    free(packet);
 
     exit(0);
 
 }
+
+int add_padding_to_sdu(struct mip_client_packet *packet){
+    //use trlen to find the length in bytes and add padding if necesary
+    /* I assume that the sdu will only contain the message string*/
+    size_t message_length_bytes = strlen(packet->message ) ;
+    if(message_length_bytes%4==0){
+        return 1;
+    }
+    size_t padding_needed = 4 - message_length_bytes%4;
+    char *padding= calloc(padding_needed,sizeof(char));
+    if (padding==NULL){
+        perror("sdu padding malloc failed");
+        exit(EXIT_FAILURE);
+    }
+
+    memset(packet->message + message_length_bytes, 0 , padding_needed);
+    //adding nulltrerminator to string 
+    packet->message[message_length_bytes + padding_needed] = "\0";
+    free(padding);
+    return 1;
+}
+
 

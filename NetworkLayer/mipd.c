@@ -160,8 +160,21 @@ int main(int argc, char *argv[]){
 
 //raw mip ethernet communication
 
-struct mip_pdu* create_mip_datagram(){
+struct mip_pdu* create_mip_datagram(struct mip_client_packet *client_packet, uint8_t sdu_type){
     //fill mip header
     struct mip_header * header = malloc(sizeof(struct mip_header));
+    //filling the header values
+    memcpy(header->dest_addr, client_packet->dst_mip_addr, 8);
+    header->src_addr = MIP_ADDRESS;
+    header->ttl= 1; //recommended to set to one according to exam text
+    header->sdu_len = strlen(client_packet->message);
+    header->sdu_type= sdu_type;
+
+    //adding the payload 
+    struct mip_pdu* mip_pdu = malloc(sizeof(struct mip_header)+ header->sdu_len*sizeof(char));
+    memcpy(&mip_pdu->mip_header, header, sizeof(struct mip_header));
+    memcpy(mip_pdu->sdu, client_packet->message, header->sdu_len);
+
+    return mip_pdu;
 
 }

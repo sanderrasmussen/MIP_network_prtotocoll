@@ -19,7 +19,8 @@
 
 struct mip_client_packet{
     uint8_t dst_mip_addr;
-    char message[1024];
+    char *message;
+    
 };
 
     

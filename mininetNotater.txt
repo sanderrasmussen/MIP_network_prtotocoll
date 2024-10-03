@@ -7,10 +7,11 @@ gi raw sockets permissions inne i mininet noden fra mininet terminal
 B sudo setcap cap_net_raw+ep ./mipdtest
 
 kjør program i node B fra bakgrunnen:
-B sudo ./mipdtest &
+B sudo ./mipd &
 
 kjør program fra A
 A sudo ./mipd
+A sudo sudo ./ping_client /tmp/unix.sock 20 "hello there"
 
 hent program B frem i terminalen igjen:
 B fg
