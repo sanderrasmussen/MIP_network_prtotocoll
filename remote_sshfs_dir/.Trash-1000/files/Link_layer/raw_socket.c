@@ -11,8 +11,6 @@
 #include <arpa/inet.h>	/* htons */
 #include <ifaddrs.h>	/* getifaddrs */
 #include "raw_socket.h"
-#include "mip_arp.h"
-#include "../NetworkLayer/mipd.h"
 
 
 #define DST_MAC_ADDR {0x00, 0x00, 0x00, 0x00, 0x00, 0x02}
@@ -56,7 +54,7 @@ int get_mac_from_interface(struct sockaddr_ll *socket_name){
 /* creates and returns a raw socket */
 int setupRawSocket(){
     short unsigned int mip = 0x88B5;
-    int raw_sockfd=socket(AF_PACKET , SOCK_RAW, htons(ETH_P_MIP)); //all protocols
+    int raw_sockfd=socket(AF_PACKET , SOCK_RAW, htons(mip)); //all protocols
     if(raw_sockfd == -1){
         fprintf(stderr, "Error: could not create raw socket ");
         exit(EXIT_FAILURE);
@@ -150,14 +148,12 @@ int recv_raw_packet(int rawSocket, uint8_t *buffer, size_t length){
     }
 
     printf("Received MIP packet\n");
-    /* if the received message is an arp message, then we will handle it according to specifications int the assignment text*/
-    handle_arp_packet((struct mip_arp_message *) message.msg_iov[1].iov_base);
 
     return status;
 }
 
 
-int send_arp(int raw_socket, struct sockaddr_ll *socket_name, uint8_t dst_mip_addr, struct mip_pdu *mip_pdu){
+int send_arp(int raw_socket, struct sockaddr_ll *socket_name){
 
     struct ether_frame ethernet_header;
     struct msghdr *message_header;
@@ -177,9 +173,6 @@ int send_arp(int raw_socket, struct sockaddr_ll *socket_name, uint8_t dst_mip_ad
 
     ioVector[0].iov_base = &ethernet_header;
     ioVector[0].iov_len = sizeof(struct ether_frame);
-    //arp message in payload
-    ioVector[1].iov_base = &mip_pdu;
-    ioVector[1].iov_len = sizeof(struct mip_pdu);
 
     
     message_header = (struct msghdr *)calloc(1, sizeof(struct msghdr));
@@ -196,22 +189,8 @@ int send_arp(int raw_socket, struct sockaddr_ll *socket_name, uint8_t dst_mip_ad
         exit(EXIT_FAILURE);
     }
     printf("arp is sent");
-    free(mip_pdu);
     free(message_header);
     return 1;
-}
-int send_arp_response(){
-    
-}
-
-int handle_arp_packet(struct mip_arp_message *arp_message ){
-    if (arp_message->type==1){
-
-    }
-    else if (arp_message->type==0){
-
-    }
-    //if we reached this, then the packet is not an arp message
 }
 
 

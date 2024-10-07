@@ -13,6 +13,6 @@ struct entry{
     struct entry *next;
 };
 //returns -1 if no entry is found. else it returns the mac adddress
-int get_mac_from_cache(uint8_t mip_address, uint8_t *dst_addr_buffer);
-int add_to_cache(uint8_t mip_address, uint8_t mac_address );
+struct entry* get_mac_from_cache(struct cache *cache, uint8_t mip_address);
+int add_to_cache(struct cache *cache, uint8_t mip_address, uint8_t mac_address );
 #endif // MIP_H_

@@ -25,7 +25,7 @@ int main(int argc, char *argv[]){
     uint8_t dst_mip_addr;
     uint8_t arg;
     uint8_t h_option ;
-    struct mip_client_packet *packet = malloc(sizeof(struct mip_client_packet));
+    struct mip_client_payload *packet = malloc(sizeof(struct mip_client_payload));
     
 
     if (argc == 4){
@@ -63,7 +63,7 @@ int main(int argc, char *argv[]){
 
 }
 
-int add_padding_to_sdu(struct mip_client_packet *packet){
+int add_padding_to_sdu(struct mip_client_payload *packet){
     //use trlen to find the length in bytes and add padding if necesary
     /* I assume that the sdu will only contain the message string*/
     size_t message_length_bytes = strlen(packet->message ) ;

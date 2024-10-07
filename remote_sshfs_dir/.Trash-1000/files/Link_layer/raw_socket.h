@@ -1,6 +1,3 @@
-#ifndef RAW_SOCKET_H_
-#define RAW_SOCKET_H_
-
 #include <stdint.h>
 #include <stdlib.h>	/* free */
 #include <stdio.h>	/* printf */
@@ -13,8 +10,8 @@
 #include <net/ethernet.h>	/* ETH_* */
 #include <arpa/inet.h>	/* htons */
 #include <ifaddrs.h>	/* getifaddrs */
-#include "../NetworkLayer/mipd.h"
 
+#define DST_MAC_ADDR {0x00, 0x00, 0x00, 0x00, 0x00, 0x02}
 #define BROADCAST_ADDRESS {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}
 #define ETH_P_MIP 0x88B5
 
@@ -33,5 +30,4 @@ int recv_raw_packet(int rawSocket, uint8_t *buffer, size_t length);
 int get_mac_from_interface(struct sockaddr_ll *socket_name);
 void print_mac_address(uint8_t *addr, size_t len);
 int raw_socket_listen();
-int send_arp(int raw_socket, struct sockaddr_ll *socket_name, uint8_t dst_mip_addr, struct mip_pdu *mip_pdu);
-#endif
+int send_arp(int raw_socket, struct sockaddr_ll *socket_name);

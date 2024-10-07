@@ -16,8 +16,6 @@
 #include <net/ethernet.h>	/* ETH_* */
 #include <arpa/inet.h>	/* htons */
 #include <ifaddrs.h>	/* getifaddrs */
-#include "../Application_layer/unix_socket.h"
-#include "../Link_layer/raw_socket.h"
 #include "cache.h"
 
 //to be implemented.
