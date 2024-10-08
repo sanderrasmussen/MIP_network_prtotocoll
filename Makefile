@@ -31,6 +31,6 @@ cache.o: NetworkLayer/cache.c
 clean:
 	$(RM) NetworkLayer/mipd.o Application_layer/unix_socket.o Link_layer/raw_socket.o mipd
 	$(RM) ping_client.o ping_client
-	$(RM) NetworkLayer/mipdtest.o Application_layer/unix_socket.o Link_layer/raw_socket.o mipdtest
+
 	
 

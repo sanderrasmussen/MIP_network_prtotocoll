@@ -14,9 +14,6 @@
 #include "mip_arp.h"
 #include "../NetworkLayer/mipd.h"
 
-
-#define DST_MAC_ADDR {0x00, 0x00, 0x00, 0x00, 0x00, 0x02}
-
 #define ETH_P_MIP 0x88B5
 
 void print_mac_addr(uint8_t *addr, size_t len)
@@ -65,7 +62,7 @@ int setupRawSocket(){
     return raw_sockfd;
 }
 
-int send_raw_packet(int rawSocket, struct sockaddr_ll *socket_name, uint8_t *payload, size_t length){
+int send_raw_packet(int rawSocket, struct sockaddr_ll *socket_name, struct mip_pdu  *payload, size_t length, uint8_t dst_mac_addr[6]){
     int status;
     struct ether_frame ether_frame_header;
     /* msgheader is what we send over link layer*/
@@ -74,8 +71,7 @@ int send_raw_packet(int rawSocket, struct sockaddr_ll *socket_name, uint8_t *pay
     struct iovec msgvec[2];
 
     // fill out the ether frame
-    uint8_t destinations_mac_address[]= DST_MAC_ADDR;
-    memcpy(ether_frame_header.dst_addr, destinations_mac_address, 6);
+    memcpy(ether_frame_header.dst_addr, dst_mac_addr, 6);
     memcpy(ether_frame_header.src_addr, socket_name->sll_addr, 6);
     ether_frame_header.eth_proto[0] = (ETH_P_MIP >> 8) & 0xFF;  // Høybyte
 ether_frame_header.eth_proto[1] = ETH_P_MIP & 0xFF;         // Lavbyte
@@ -108,7 +104,7 @@ ether_frame_header.eth_proto[1] = ETH_P_MIP & 0xFF;         // Lavbyte
     free(message);
     return 1;
 }
-int recv_raw_packet(int rawSocket, uint8_t *buffer, size_t length){
+int recv_raw_packet(int rawSocket, struct mip_pdu *buffer, size_t length){
     int status;
     struct sockaddr_ll socket_name;
     struct ether_frame ethernet_frame_header;

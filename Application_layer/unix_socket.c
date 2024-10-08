@@ -98,8 +98,12 @@ int unixSocket_send(int unix_data_socket, struct mip_client_payload *payload){
         exit(EXIT_FAILURE);
     }
 }
-int unixSocket_recieve(int unix_data_socket, char *buffer){
-    int status= read(unix_data_socket,buffer, sizeof(buffer));
+int unixSocket_recieve(int unix_data_socket, struct mip_client_payload *payload){
+    int status= read(unix_data_socket,payload, sizeof(struct mip_client_payload));
+    if(status==-1){
+        perror("unix socket read");
+        exit(EXIT_FAILURE);
+    }
 }
 int close_unix_socket(int socket, char *socketname){
     close(socket);

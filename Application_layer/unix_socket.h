@@ -36,8 +36,7 @@ int unixSocket_bind(int unix_sockfd, char *pathToSocket, struct sockaddr_un *add
 int unixSocket_listen(int unix_sockfd, char *pathToSocket, int unix_data_socket);
 int unixSocket_connect(int unix_sockfd, char *pathToSocket, struct sockaddr_un *addresss );
 int unixSocket_send(int unix_data_socket, struct mip_client_payload* payload);
-int unixSocket_recieve(int unix_data_socket, char *buffer);
+int unixSocket_recieve(int unix_data_socket, struct mip_client_payload *payload);
 int close_unix_socket(int socket, char *socketname);
 int add_to_epoll_table(int epoll_socket, struct epoll_event *event, int socket);
-
 #endif 

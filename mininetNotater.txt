@@ -5,12 +5,13 @@ sudo -E mn --custom he1-mn-topo.py --topo he1 --link tc --x
 
 gi raw sockets permissions inne i mininet noden fra mininet terminal
 B sudo setcap cap_net_raw+ep ./mipd
+A sudo setcap cap_net_raw+ep ./mipd
 
 kjør program i node B fra bakgrunnen:
 B sudo ./mipd &
 
 kjør program fra A
-A sudo ./mipd
+A sudo ./mipd &
 A sudo ./ping_client /tmp/unix.sock 20 "hello there"
 
 hent program B frem i terminalen igjen:
