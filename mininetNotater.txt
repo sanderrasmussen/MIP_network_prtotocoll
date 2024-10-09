@@ -12,7 +12,7 @@ B sudo ./mipd &
 
 kjør program fra A
 A sudo ./mipd &
-A sudo ./ping_client /tmp/unix.sock 20 "hello there"
+A ./ping_client /tmp/unix.sock 20 "hello there"
 
 hent program B frem i terminalen igjen:
 B fg

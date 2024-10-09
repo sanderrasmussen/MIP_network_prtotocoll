@@ -91,12 +91,29 @@ int unixSocket_connect(int unix_sockfd, char *pathToSocket, struct sockaddr_un *
     };
     return status;
 }   
-int unixSocket_send(int unix_data_socket, struct mip_client_payload *payload){
-    int status = write(unix_data_socket, payload, sizeof(struct mip_client_payload));
-    if (status == -1){
-        perror("Error : unix socket write");
+int unixSocket_send(int unix_data_socket, struct mip_client_payload *payload,size_t message_len_bytes) {
+    size_t message_len_byte = strlen(payload->message); // Få lengden på meldingen
+    char *packet_buffer = malloc(message_len_bytes + sizeof(uint8_t) + 1); // +1 for null terminator
+
+    if (packet_buffer == NULL) {
+        perror("Error: malloc failed");
         exit(EXIT_FAILURE);
     }
+
+    memcpy(packet_buffer, &(payload->dst_mip_addr), sizeof(uint8_t)); // Kopier dst_mip_addr
+    strcpy(packet_buffer + sizeof(uint8_t), payload->message); // Kopier meldingen
+    packet_buffer[sizeof(uint8_t) + message_len_bytes] = '\0'; // Null-terminator
+
+    int status = write(unix_data_socket, packet_buffer, sizeof(uint8_t) + message_len_bytes + 1); // Send buffer
+
+    if (status == -1) {
+        perror("Error: unix socket write");
+        free(packet_buffer); // Frigjør minne før exit
+        exit(EXIT_FAILURE);
+    }
+
+    free(packet_buffer); // Frigjør minnet etter sending
+    return status; // Returner status
 }
 int unixSocket_recieve(int unix_data_socket, struct mip_client_payload *payload){
     int status= read(unix_data_socket,payload, sizeof(struct mip_client_payload));
