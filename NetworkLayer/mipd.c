@@ -118,10 +118,13 @@ struct mip_pdu* create_mip_datagram( uint8_t sdu_type, uint8_t arp_type, uint8_t
 
 }
 int serve_raw_connection( int raw_socket){
-    char buffer[MAX_MESSAGE_SIZE];
-    recv_raw_packet(raw_socket,buffer, MAX_MESSAGE_SIZE );
+    struct mip_pdu *mip_pdu= malloc(sizeof(struct mip_pdu));
+    //srry need to hard code this, short on time
+    mip_pdu->sdu.arp_msg_payload = malloc(ARP_SDU_SIZE);
+    mip_pdu->sdu.message_payload = malloc(SDU_MESSAGE_MAX_SIZE);
+    recv_raw_packet(raw_socket,mip_pdu, sizeof(struct mip_pdu) + ARP_SDU_SIZE + SDU_MESSAGE_MAX_SIZE );
 
-   
+   close(raw_socket);
     return 1;
    
 }
@@ -170,7 +173,7 @@ int serve_unix_connection(struct epoll_event *events,int sock_accept, int raw_so
         //struct mip_pdu *pdu = create_mip_datagram(buffer, MIP_ARP, REQUEST);
         struct mip_pdu *pdu = create_mip_datagram( PING, REQUEST, buffer->dst_mip_addr, buffer->message);
         printf("pdu message %s \n",  pdu->sdu.message_payload);
-        send_arp(raw_socket,socket_name, htons(&(buffer->dst_mip_addr) ),  pdu->sdu.message_payload);
+        send_arp(raw_socket,socket_name,   pdu);
     }
     //if mac in cache we just send the ping directly
     else{

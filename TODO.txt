@@ -1,1 +1,3 @@
 Padding er feil paa unix socket. Dette maa fikses
+
+IKKE SEND STRUCT MIP_PDU, GJOR DEN TIL EN BUFFER OG SEND BUFFER

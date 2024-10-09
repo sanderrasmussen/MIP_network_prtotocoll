@@ -1,4 +1,4 @@
-
+#define MAX_MESSAGE_SIZE 100
 #include <stdio.h>
 #include <sys/socket.h>
 #include <stdlib.h>
@@ -18,7 +18,9 @@
 #include <ifaddrs.h>	/* getifaddrs */
 #include "Application_layer/unix_socket.h"
 
-//returns message length with padding in bytes
+//OOOOPPPS , ONLY CHARACTERS IN PING_CLIENT IS ALLOWED. IF YOU PASS A STRING WITH A COMMA (,) OR OTHER SIMILAR CHARS THIS PROGRAM WILL FAIL
+
+
 size_t fill_sdu(struct mip_client_payload *packet,  char *message){
     //use trlen to find the length in bytes and add padding if necesary
     /* I assume that the sdu will only contain the message string*/
@@ -43,9 +45,10 @@ size_t fill_sdu(struct mip_client_payload *packet,  char *message){
         perror("sdu padding malloc failed");
         exit(EXIT_FAILURE);
     }
+    message[message_len ] = '\0';
     strcpy(packet->message, message);
     //adding nulltrerminator to string 
-    packet->message[message_len ] = '\0';
+ 
     printf("message length : %d", message_len);
     return total_message_alloc_size;
 }
@@ -91,7 +94,7 @@ int main(int argc, char *argv[]){
 
     unixSocket_connect(unix_data_socket, unix_socket_path, address);
     unixSocket_send(unix_data_socket, packet, packet_size );
-    printf("message %s sendt \n", packet->message);
+    //printf("message %s sendt \n", packet->message);
     printf("dst address : %u ", packet->dst_mip_addr);
     printf("packet length : %d bytes", packet_size);
     close(unix_data_socket);

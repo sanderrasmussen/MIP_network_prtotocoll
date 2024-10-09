@@ -4,7 +4,9 @@
 #include <stdint.h>
 #include "../Application_layer/unix_socket.h"
 #include "../Link_layer/mip_arp.h"
-
+#define MIP_HEADER_SIZE 4
+#define ARP_SDU_SIZE 8
+#define SDU_MESSAGE_MAX_SIZE 100
 /* In total this structure should only take 32 bits, hopefully*/
 struct mip_header{
     uint8_t dest_addr : 8;
@@ -20,9 +22,9 @@ which can be mip_arp og ping*/
 
 
 struct mip_pdu{
-    struct mip_header mip_header;
+    struct mip_header mip_header; //32 bits
     union{
-        struct mip_arp_message *arp_msg_payload;
+        struct mip_arp_message *arp_msg_payload; //64 bits
         //we have an add padding function that will add the needed padding
         char *message_payload;//this is the payload, must be 32, divisible by 4. padding can be implemented in an upper layer protocol
     }sdu;

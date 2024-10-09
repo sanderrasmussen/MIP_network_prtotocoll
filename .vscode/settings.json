@@ -7,6 +7,7 @@
         "raw_socket.h": "c",
         "if_packet.h": "c",
         "inet.h": "c",
-        "ethernet.h": "c"
+        "ethernet.h": "c",
+        "mipd.h": "c"
     }
 }

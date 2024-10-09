@@ -14,6 +14,7 @@
 #include "mip_arp.h"
 #include "../NetworkLayer/mipd.h"
 
+
 #define ETH_P_MIP 0x88B5
 
 void print_mac_addr(uint8_t *addr, size_t len)
@@ -104,7 +105,7 @@ ether_frame_header.eth_proto[1] = ETH_P_MIP & 0xFF;         // Lavbyte
     free(message);
     return 1;
 }
-int recv_raw_packet(int rawSocket, char *buffer, size_t length){
+int recv_raw_packet(int rawSocket, struct mip_pdu *buffer, size_t length){
     int status;
     struct sockaddr_ll socket_name;
     struct ether_frame ethernet_frame_header;
@@ -126,7 +127,7 @@ int recv_raw_packet(int rawSocket, char *buffer, size_t length){
     message.msg_iov = msgvec;
     message.msg_iovlen = 2;
 
-    printf("Listening for packet\n");
+    printf("receiving packet \n");
 
     // Receive the raw packet
     status = recvmsg(rawSocket, &message, 0);
@@ -134,29 +135,24 @@ int recv_raw_packet(int rawSocket, char *buffer, size_t length){
         perror("Could not receive raw socket message");
         return -1;  // Avoid exiting, return error code instead
     }
-
-    //printf("Packet received, message: %s \n",message.msg_iov[1].iov_base );
-      for (int i = 0; i < 16 && i < length; i++) {
-        printf("%04x ", ((unsigned char*)msgvec[1].iov_base)[i]);
-    }
-    print_mac_addr(ethernet_frame_header.src_addr, 6);  // Print source MAC address
-    
-    // Validate protocol (ethertype) to ensure it's a MIP packet (0x88B5)
-    uint16_t eth_proto = (ethernet_frame_header.eth_proto[0] << 8) | ethernet_frame_header.eth_proto[1];
-    if (eth_proto != ETH_P_MIP) {
-        printf("Received packet with unknown ethertype: 0x%04x\n", eth_proto);
-        return -1;
-    }
-    char *recved_msg= message.msg_iov[1].iov_base;
-    printf("Received MIP packet %s \n", recved_msg );
+        printf("received packet \n");
+    if (status >= sizeof(struct mip_pdu)) {
+    struct mip_pdu *mip_pdu = (struct mip_pdu *) message.msg_iov[1].iov_base;
+    printf("Message: %s\n", (char *) mip_pdu->sdu.message_payload);
+} else {
+    printf("Received data is smaller than expected MIP PDU size.\n");
+}
+    //print_mac_addr(ethernet_frame_header.src_addr, 6);  // Print source MAC address
+    struct mip_pdu *mip_pdu =  message.msg_iov->iov_base;
+    printf(" message : %s \n", (char *) mip_pdu->sdu.message_payload);
     /* if the received message is an arp message, then we will handle it according to specifications int the assignment text*/
-    handle_arp_packet(rawSocket, message.msg_iov[1].iov_base);
-
+    //handle_arp_packet(rawSocket, message.msg_iov[1].iov_base);
+    printf("        pakke mottat    ");
     return status;
 }
 
 
-int send_arp(int raw_socket, struct sockaddr_ll *socket_name, uint8_t dst_mip_addr, struct mip_pdu *mip_pdu){
+int send_arp(int raw_socket, struct sockaddr_ll *socket_name, struct mip_pdu *mip_pdu){
 
     struct ether_frame ethernet_header;
     struct msghdr *message_header;
@@ -178,7 +174,7 @@ int send_arp(int raw_socket, struct sockaddr_ll *socket_name, uint8_t dst_mip_ad
     ioVector[0].iov_len = sizeof(struct ether_frame);
     //arp message in payload
     ioVector[1].iov_base = mip_pdu;
-    ioVector[1].iov_len = sizeof(struct mip_pdu);
+    ioVector[1].iov_len = sizeof(mip_pdu) + ARP_SDU_SIZE + SDU_MESSAGE_MAX_SIZE;
 
     
     message_header = (struct msghdr *)calloc(1, sizeof(struct msghdr));
@@ -186,7 +182,7 @@ int send_arp(int raw_socket, struct sockaddr_ll *socket_name, uint8_t dst_mip_ad
     message_header->msg_name = socket_name ;
     message_header->msg_namelen = sizeof(struct sockaddr_ll);
     message_header->msg_iov = ioVector;
-    message_header->msg_iovlen = 1;
+    message_header->msg_iovlen = 2;
     printf("sending arp");
     status = sendmsg(raw_socket, message_header,0);
     if (status==-1){
@@ -194,7 +190,9 @@ int send_arp(int raw_socket, struct sockaddr_ll *socket_name, uint8_t dst_mip_ad
         free(message_header);
         exit(EXIT_FAILURE);
     }
-    printf("\n=== arp is sent, message: %s ===", (char *) message_header->msg_iov[1].iov_base );
+    printf("\n=== arp is sent, message: %s ===", ((struct mip_pdu *)message_header->msg_iov[1].iov_base)->sdu.message_payload);
+
+
     free(mip_pdu);
     free(message_header);
     return 1;
@@ -203,7 +201,7 @@ int send_arp_response(){
     
 }
 
-int handle_arp_packet(int raw_sock ,char *arp_message ){
+int handle_arp_packet(int raw_sock ,struct mip_pdu *arp_message ){
 
     //if we reached this, then the packet is not an arp message
     close(raw_sock);
