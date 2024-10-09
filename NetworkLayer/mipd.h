@@ -28,7 +28,7 @@ struct mip_pdu{
     }sdu;
 }__attribute__((packed));
 
-struct mip_pdu* create_mip_datagram(struct mip_client_payload *client_packet, uint8_t sdu_type, uint8_t arp_type);
+struct mip_pdu* create_mip_datagram( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_mip_addr, char *message);
 
 
 #endif // MIP_H_

@@ -135,7 +135,10 @@ int recv_raw_packet(int rawSocket, char *buffer, size_t length){
         return -1;  // Avoid exiting, return error code instead
     }
 
-    printf("Packet received \n");
+    //printf("Packet received, message: %s \n",message.msg_iov[1].iov_base );
+      for (int i = 0; i < 16 && i < length; i++) {
+        printf("%04x ", ((unsigned char*)msgvec[1].iov_base)[i]);
+    }
     print_mac_addr(ethernet_frame_header.src_addr, 6);  // Print source MAC address
     
     // Validate protocol (ethertype) to ensure it's a MIP packet (0x88B5)
@@ -144,10 +147,10 @@ int recv_raw_packet(int rawSocket, char *buffer, size_t length){
         printf("Received packet with unknown ethertype: 0x%04x\n", eth_proto);
         return -1;
     }
-    //char *recved_msg= message.msg_iov[1].iov_base;
-    //printf("Received MIP packet %s \n", recved_msg[5] );
+    char *recved_msg= message.msg_iov[1].iov_base;
+    printf("Received MIP packet %s \n", recved_msg );
     /* if the received message is an arp message, then we will handle it according to specifications int the assignment text*/
-    handle_arp_packet(rawSocket,(char*) message.msg_iov[1].iov_base);
+    handle_arp_packet(rawSocket, message.msg_iov[1].iov_base);
 
     return status;
 }
@@ -191,8 +194,7 @@ int send_arp(int raw_socket, struct sockaddr_ll *socket_name, uint8_t dst_mip_ad
         free(message_header);
         exit(EXIT_FAILURE);
     }
-    printf("\n mippdu parameter %s .",  mip_pdu->sdu.message_payload);
-    printf("\n arp is sent, message: %s .", (char *) message_header->msg_iov[1].iov_base );
+    printf("\n=== arp is sent, message: %s ===", (char *) message_header->msg_iov[1].iov_base );
     free(mip_pdu);
     free(message_header);
     return 1;

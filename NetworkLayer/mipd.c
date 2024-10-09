@@ -33,8 +33,8 @@
 */
 
 //raw mip ethernet communication
-//if arp packet, then client packet=NULL, if if ping then apr_type is NULL
-struct mip_pdu* create_mip_datagram(struct mip_client_payload *client_packet, uint8_t sdu_type, uint8_t arp_type){
+
+struct mip_pdu* create_mip_datagram( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_mip_addr, char *message){
     if(sdu_type==MIP_ARP){
 
     /* HEADER: 
@@ -46,54 +46,71 @@ struct mip_pdu* create_mip_datagram(struct mip_client_payload *client_packet, ui
      */
         struct mip_header *header = malloc(sizeof(struct mip_header));
         //filling the header values
-        if (client_packet->dst_mip_addr==NULL){
+        if (dst_mip_addr==NULL){
             perror("client packet is null ");
             exit(EXIT_FAILURE);
         }
-        printf("%d", client_packet->dst_mip_addr);
-        //memcpy(header->dest_addr, client_packet->dst_mip_addr, sizeof(client_packet->dst_mip_addr));
+        header->dest_addr = dst_mip_addr;
         header->src_addr = MIP_ADDRESS;
         header->ttl= 1; //recommended to set to one according to exam text
-        if (client_packet->message!=NULL){
-            header->sdu_len = strlen(client_packet->message);
-        }
-        else{
-            header->sdu_len = 0;
-        }
- 
-        header->sdu_type= sdu_type;
+        header->sdu_type= sdu_type; //can be ping or arp, in this case it is arp
+        header->sdu_len = sizeof(uint32_t);
+         /*if it is arp, then we know that the sdu len is only 32 bit because the payload is:
+       
+                    +-------+-------------------------+-----------------------------+
+            | Type  | Address                 | Padding/ Reserved           |
+            +-------+-------------------------+-----------------------------+
+            | 0x00  | MIP address to look up  | Pad with 0x00 until 32 bits |
+            +-------+-------------------------+-----------------------------+
+
+        */
 
         //adding the payload 
         struct mip_pdu* mip_pdu = malloc(sizeof(struct mip_header)+ header->sdu_len*sizeof(char));
+        mip_pdu->sdu.arp_msg_payload = malloc(sizeof(struct mip_arp_message));
+        
         memcpy(&mip_pdu->mip_header, header, sizeof(struct mip_header));
-        memcpy(&mip_pdu->sdu.arp_msg_payload, client_packet->message, header->sdu_len);
+        /*filling sdu which is pointer to
+            struct mip_arp_message{
+                uint32_t type : 1;
+                uint32_t address : 8;
+                uint32_t padding : 23;
+        }__attribute__((packed));
+        */
+        //fill mip arp message:
+        mip_pdu->sdu.arp_msg_payload->type = arp_type; //request or response
+        mip_pdu->sdu.arp_msg_payload->address = dst_mip_addr;//address to look up 
+        mip_pdu->sdu.arp_msg_payload->padding = 0; //padd, one 0 will take the rest of the space so that the struct is in total 32 bits
 
         return mip_pdu; 
     }
     else if(sdu_type==PING){
         //fill mip header
-        struct mip_header * header = malloc(sizeof(struct mip_header));
-        
+         /* HEADER: 
+     +--------------+-------------+---------+-----------+-----------+
+     | Dest. Addr.  | Src. Addr.  | TTL     | SDU Len.  | SDU type  |
+     +--------------+-------------+---------+-----------+-----------+
+     | 8 bits       | 8 bits      | 4 bits  | 9 bits    | 3 bits    |
+     +--------------+-------------+---------+-----------+-----------+
+     */
+        struct mip_header *header = malloc(sizeof(struct mip_header));
         //filling the header values
-        if (client_packet->dst_mip_addr==NULL){
+        if (dst_mip_addr==NULL){
             perror("client packet is null ");
             exit(EXIT_FAILURE);
         }
-        printf("%d", client_packet->dst_mip_addr);
-        header->dest_addr = client_packet->dst_mip_addr;
+
+        header->dest_addr = dst_mip_addr;
         header->src_addr = MIP_ADDRESS;
         header->ttl= 1; //recommended to set to one according to exam text
-        header->sdu_len = sizeof(client_packet->message);
-        header->sdu_type= sdu_type;
-        /* there are two mip arp types whithin the arp. RESPONSE AND REQUEST, the arp_type parameter is used to know which one*/
-        struct mip_pdu* mip_pdu = malloc(sizeof(struct mip_header)+ header->sdu_len*sizeof(char));
-        struct mip_arp_message *mip_arp_message = malloc(sizeof(struct mip_arp_message));
-        //adding the payload , in this case a arp ping type
-        //if ping packet, we dont need a message, instead we make an  
-        mip_arp_message->type= arp_type;
-        mip_arp_message->address = client_packet->dst_mip_addr;
-        mip_arp_message->padding= 0;
-        memcpy(&mip_pdu->mip_header, header, sizeof(struct mip_header));
+        header->sdu_type= sdu_type; //can be ping or arp, in this case it is arp
+        header->sdu_len = strlen(message); //size of message, since we have PING type here
+
+        //filling the pdu
+        struct mip_pdu *mip_pdu = malloc(sizeof(struct mip_pdu));
+        mip_pdu->sdu.message_payload = malloc(strlen(message)+1);
+        memcpy(mip_pdu->sdu.message_payload, message, strlen(message)+1);
+
         return mip_pdu; 
     }
     return NULL;
@@ -103,8 +120,8 @@ struct mip_pdu* create_mip_datagram(struct mip_client_payload *client_packet, ui
 int serve_raw_connection( int raw_socket){
     char buffer[MAX_MESSAGE_SIZE];
     recv_raw_packet(raw_socket,buffer, MAX_MESSAGE_SIZE );
-    printf("receved raw packet %s \n", buffer[2]);
-    free(buffer);
+
+   
     return 1;
    
 }
@@ -151,9 +168,9 @@ int serve_unix_connection(struct epoll_event *events,int sock_accept, int raw_so
     if (cache_entry==NULL){
         //create mipheader and packet 
         //struct mip_pdu *pdu = create_mip_datagram(buffer, MIP_ARP, REQUEST);
-        struct mip_pdu *pdu = create_mip_datagram(buffer, PING, REQUEST);
-        printf("pdu message %s \n", (char *) &pdu->sdu.message_payload);
-        send_arp(raw_socket,socket_name, htons(&(buffer->dst_mip_addr) ), (char *) pdu->sdu.message_payload);
+        struct mip_pdu *pdu = create_mip_datagram( PING, REQUEST, buffer->dst_mip_addr, buffer->message);
+        printf("pdu message %s \n",  pdu->sdu.message_payload);
+        send_arp(raw_socket,socket_name, htons(&(buffer->dst_mip_addr) ),  pdu->sdu.message_payload);
     }
     //if mac in cache we just send the ping directly
     else{
