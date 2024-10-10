@@ -109,13 +109,16 @@ ether_frame_header.eth_proto[1] = ETH_P_MIP & 0xFF;         // Lavbyte
     free(message);
     return 1;
 }
-int recv_raw_packet(int rawSocket, struct mip_pdu *pdu, size_t length){
+struct mip_pdu * recv_pdu_from_raw(int rawSocket){
     int status;
+    size_t pdu_length = sizeof(uint64_t)+ 100; //hardcoded sadly
+    struct mip_pdu *pdu = malloc(sizeof(pdu_length));
     struct sockaddr_ll socket_name;
     struct ether_frame ethernet_frame_header;
     struct msghdr message;
     struct iovec msgvec[2];
-    char *serilzd_pdu = malloc(length);
+    char *serilzd_pdu = malloc(pdu_length);
+
     // Nullstill strukturen for å unngå uønskede verdier
     memset(&socket_name, 0, sizeof(struct sockaddr_ll));
     memset(&ethernet_frame_header, 0, sizeof(struct ether_frame));
@@ -124,7 +127,7 @@ int recv_raw_packet(int rawSocket, struct mip_pdu *pdu, size_t length){
     msgvec[0].iov_base = &ethernet_frame_header;
     msgvec[0].iov_len = sizeof(struct ether_frame);
     msgvec[1].iov_base = serilzd_pdu;
-    msgvec[1].iov_len = length;
+    msgvec[1].iov_len = pdu_length;
 
     message.msg_name = &socket_name;
     message.msg_namelen = sizeof(struct sockaddr_ll);
@@ -142,14 +145,16 @@ int recv_raw_packet(int rawSocket, struct mip_pdu *pdu, size_t length){
         printf("received packet \n");
  
     //derserialize pdu buffer
-    pdu = deserialize_pdu(serilzd_pdu, length);
+    pdu = deserialize_pdu(serilzd_pdu, pdu_length);
 
-
-    print_mac_addr(ethernet_frame_header.src_addr, 6);  // Print source MAC address
     
+    print_mac_addr(ethernet_frame_header.src_addr, 6);  // Print source MAC address
+        printf(" src mip addresse  : %d \n ",  pdu->mip_header.src_addr);
     printf(" message : %s \n ", pdu->sdu.message_payload);
-    printf("        pakke mottat    ");
-    return status;
+    
+    printf("        pakke mottat   \n ");
+    
+    return pdu;
 }
 
 

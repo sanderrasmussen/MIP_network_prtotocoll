@@ -174,7 +174,7 @@ struct mip_pdu* create_mip_pdu( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_
         
         printf("pdu test : \n");
         printf("dst addr %d ", mip_pdu->mip_header.dest_addr);
-        printf("message : %s \n", mip_pdu->sdu.message_payload);
+    
 
 
         return mip_pdu; 
@@ -185,14 +185,17 @@ struct mip_pdu* create_mip_pdu( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_
 
 }
 int serve_raw_connection( int raw_socket){
-    struct mip_pdu *mip_pdu= malloc(sizeof(struct mip_pdu));
-    //srry need to hard code this, short on time
-    mip_pdu->sdu.arp_msg_payload = malloc(sizeof(uint32_t));
-    mip_pdu->sdu.message_payload = malloc(SDU_MESSAGE_MAX_SIZE);
-
-    recv_raw_packet(raw_socket,mip_pdu, sizeof(struct mip_pdu) + sizeof(uint32_t) + SDU_MESSAGE_MAX_SIZE );
-
-   close(raw_socket);
+    struct mip_pdu * mip_pdu = recv_pdu_from_raw(raw_socket);
+    //this is the interesting part, because now we need to answer if we have the mip address and send response back
+    if(mip_pdu->mip_header.sdu_type==MIP_ARP){
+        printf("received ARP");
+        send_arp_response(); 
+    }
+    else{
+        printf("===Received message from %d === \n", mip_pdu->mip_header.src_addr);
+        printf( "===message : %s === \n", mip_pdu->sdu.message_payload);
+    }
+    close(raw_socket);
     return 1;
    
 }

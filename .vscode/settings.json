@@ -8,6 +8,7 @@
         "if_packet.h": "c",
         "inet.h": "c",
         "ethernet.h": "c",
-        "mipd.h": "c"
+        "mipd.h": "c",
+        "string_view": "c"
     }
 }
