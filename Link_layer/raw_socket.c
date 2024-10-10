@@ -63,13 +63,17 @@ int setupRawSocket(){
     return raw_sockfd;
 }
 
-int send_raw_packet(int rawSocket, struct sockaddr_ll *socket_name, char *payload, size_t length, uint8_t dst_mac_addr[6]){
+int send_raw_packet(int rawSocket, struct sockaddr_ll *socket_name, struct mip_pdu *pdu, size_t length, uint8_t dst_mac_addr[6]){
     int status;
     struct ether_frame ether_frame_header;
     /* msgheader is what we send over link layer*/
     struct msghdr *message;
     /*the input output vector[0] will point tp the ether frame and the vector[1] will point to the payload*/
     struct iovec msgvec[2];
+
+    //serialize pdu
+    char *serilzd_pdu=malloc(length);
+    serialize_pdu(pdu,serilzd_pdu);
 
     // fill out the ether frame
     memcpy(ether_frame_header.dst_addr, dst_mac_addr, 6);
@@ -83,7 +87,7 @@ ether_frame_header.eth_proto[1] = ETH_P_MIP & 0xFF;         // Lavbyte
     msgvec[0].iov_base= &ether_frame_header;
     msgvec[0].iov_len = sizeof(struct ether_frame);
     //payload
-    msgvec[1].iov_base = payload;
+    msgvec[1].iov_base = serilzd_pdu;
     msgvec[1].iov_len = length;
 
     message = (struct msghdr *) calloc(1, sizeof(struct msghdr));
@@ -105,13 +109,13 @@ ether_frame_header.eth_proto[1] = ETH_P_MIP & 0xFF;         // Lavbyte
     free(message);
     return 1;
 }
-int recv_raw_packet(int rawSocket, struct mip_pdu *buffer, size_t length){
+int recv_raw_packet(int rawSocket, struct mip_pdu *pdu, size_t length){
     int status;
     struct sockaddr_ll socket_name;
     struct ether_frame ethernet_frame_header;
     struct msghdr message;
     struct iovec msgvec[2];
-
+    char *serilzd_pdu = malloc(length);
     // Nullstill strukturen for å unngå uønskede verdier
     memset(&socket_name, 0, sizeof(struct sockaddr_ll));
     memset(&ethernet_frame_header, 0, sizeof(struct ether_frame));
@@ -119,7 +123,7 @@ int recv_raw_packet(int rawSocket, struct mip_pdu *buffer, size_t length){
     // Setting up structure for saving incoming packets into our own structs
     msgvec[0].iov_base = &ethernet_frame_header;
     msgvec[0].iov_len = sizeof(struct ether_frame);
-    msgvec[1].iov_base = buffer;
+    msgvec[1].iov_base = serilzd_pdu;
     msgvec[1].iov_len = length;
 
     message.msg_name = &socket_name;
@@ -136,17 +140,14 @@ int recv_raw_packet(int rawSocket, struct mip_pdu *buffer, size_t length){
         return -1;  // Avoid exiting, return error code instead
     }
         printf("received packet \n");
-    if (status >= sizeof(struct mip_pdu)) {
-    struct mip_pdu *mip_pdu = (struct mip_pdu *) message.msg_iov[1].iov_base;
-    printf("Message: %s\n", (char *) mip_pdu->sdu.message_payload);
-} else {
-    printf("Received data is smaller than expected MIP PDU size.\n");
-}
-    //print_mac_addr(ethernet_frame_header.src_addr, 6);  // Print source MAC address
-    struct mip_pdu *mip_pdu =  message.msg_iov->iov_base;
-    printf(" message : %s \n", (char *) mip_pdu->sdu.message_payload);
-    /* if the received message is an arp message, then we will handle it according to specifications int the assignment text*/
-    //handle_arp_packet(rawSocket, message.msg_iov[1].iov_base);
+ 
+    //derserialize pdu buffer
+    pdu = deserialize_pdu(serilzd_pdu, length);
+
+
+    print_mac_addr(ethernet_frame_header.src_addr, 6);  // Print source MAC address
+    
+    printf(" message : %s \n ", pdu->sdu.message_payload);
     printf("        pakke mottat    ");
     return status;
 }
@@ -158,9 +159,13 @@ int send_arp(int raw_socket, struct sockaddr_ll *socket_name, struct mip_pdu *mi
     struct msghdr *message_header;
     struct iovec ioVector[2];
     int status;
+    //serialize pdu
+    char *serilzd_pdu = malloc((sizeof(uint32_t)*2) + 100); //temp hardcode
+    serialize_pdu(mip_pdu,serilzd_pdu );
 
-    //get_mac_from_interface(socket_name);
-
+    //test to see if deserialize wqorks
+    struct mip_pdu *test= deserialize_pdu(serilzd_pdu,(sizeof(uint32_t)*2) + 100);   
+   // printf("deserialized : %s ", test->sdu.message_payload);
     uint8_t destination_address[] = BROADCAST_ADDRESS;
 
     //filling the ethernet header
@@ -172,8 +177,8 @@ int send_arp(int raw_socket, struct sockaddr_ll *socket_name, struct mip_pdu *mi
 
     ioVector[0].iov_base = &ethernet_header;
     ioVector[0].iov_len = sizeof(struct ether_frame);
-    //arp message in payload
-    ioVector[1].iov_base = mip_pdu;
+    //payload
+    ioVector[1].iov_base = serilzd_pdu;
     ioVector[1].iov_len = sizeof(mip_pdu) + ARP_SDU_SIZE + SDU_MESSAGE_MAX_SIZE;
 
     
@@ -190,7 +195,6 @@ int send_arp(int raw_socket, struct sockaddr_ll *socket_name, struct mip_pdu *mi
         free(message_header);
         exit(EXIT_FAILURE);
     }
-    printf("\n=== arp is sent, message: %s ===", ((struct mip_pdu *)message_header->msg_iov[1].iov_base)->sdu.message_payload);
 
 
     free(mip_pdu);
@@ -208,4 +212,6 @@ int handle_arp_packet(int raw_sock ,struct mip_pdu *arp_message ){
     return 1;
 }
 
+
+//THESE PDU METHODS SHOULD BE MOVED TO SEPERATE FILE FOR ORGANIZINGS SAKE
 

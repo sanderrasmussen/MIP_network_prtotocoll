@@ -26,15 +26,74 @@
 #include "cache.h"
 
 
-/*  if(VARIBLE==-1){
-        fprintf(stderr, "Error: XXXX");
-        exit(-1);
-    }
-*/
-
 //raw mip ethernet communication
 
-struct mip_pdu* create_mip_datagram( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_mip_addr, char *message){
+size_t serialize_pdu(struct mip_pdu *mip_pdu, char* buffer){
+    //convert mip pdu into a buffer carray
+
+    size_t offset = 0;
+
+    // Serialize the mip_header
+    buffer[offset++] = mip_pdu->mip_header.dest_addr;  // 1 byte for dest_addr
+    buffer[offset++] = mip_pdu->mip_header.src_addr;   // 1 byte for src_addr
+
+    printf("serialised dst address : %d" , mip_pdu->mip_header.dest_addr);
+    printf("serialised dst address : %d" , buffer[0]  );
+    // Pack ttl (4 bits), sdu_len (9 bits), and sdu_type (3 bits) into 3 bytes
+    uint16_t ttl_sdu_len = (mip_pdu->mip_header.ttl << 12) |
+                           (mip_pdu->mip_header.sdu_len & 0x1FF);  // Pack ttl and sdu_len
+
+    buffer[offset++] = (ttl_sdu_len >> 8) & 0xFF;  // High byte of ttl_sdu_len
+    buffer[offset++] = ttl_sdu_len & 0xFF;         // Low byte of ttl_sdu_len
+    buffer[offset++] = (mip_pdu->mip_header.sdu_type & 0x07);  // 3 bits for sdu_type
+
+    // Now serialize the sdu (payload)
+    if (mip_pdu->mip_header.sdu_type == MIP_ARP) {
+        // Serialize ARP message
+        memcpy(buffer + offset, mip_pdu->sdu.arp_msg_payload, ARP_SDU_SIZE);
+        offset += ARP_SDU_SIZE;
+    } else if (mip_pdu->mip_header.sdu_type == PING) {
+        // Serialize regular message payload
+        memcpy(buffer + offset, mip_pdu->sdu.message_payload, mip_pdu->mip_header.sdu_len);
+        offset += mip_pdu->mip_header.sdu_len;
+    }
+
+    //serialize test
+//    / print("serialized message %s ", )
+    return offset;  // Return the total number of bytes serialized into the buffer
+}
+struct mip_pdu* deserialize_pdu(char* buffer, size_t length) {
+    struct mip_pdu* mip_pdu = (struct mip_pdu*)malloc(sizeof(struct mip_pdu));
+    size_t offset = 0;
+
+    // Deserialize the mip_header
+    mip_pdu->mip_header.dest_addr = buffer[offset++];   // 1 byte for dest_addr
+    mip_pdu->mip_header.src_addr = buffer[offset++];    // 1 byte for src_addr
+
+    // Extract ttl (4 bits), sdu_len (9 bits), and sdu_type (3 bits)
+    uint16_t ttl_sdu_len = (buffer[offset] << 8) | buffer[offset + 1];
+    mip_pdu->mip_header.ttl = (ttl_sdu_len >> 12) & 0x0F;  // 4 bits for TTL
+    mip_pdu->mip_header.sdu_len = ttl_sdu_len & 0x1FF;     // 9 bits for sdu_len
+    mip_pdu->mip_header.sdu_type = buffer[offset + 2] & 0x07;  // 3 bits for sdu_type
+    offset += 3;  // Move the offset by 3 bytes (2 for ttl_sdu_len and 1 for sdu_type)
+
+    // Deserialize the sdu (payload)
+    if (mip_pdu->mip_header.sdu_type == MIP_ARP) {
+        // Deserialize ARP message
+        mip_pdu->sdu.arp_msg_payload = (struct mip_arp_message*)malloc(ARP_SDU_SIZE);
+        memcpy(mip_pdu->sdu.arp_msg_payload, buffer + offset, ARP_SDU_SIZE);
+        offset += ARP_SDU_SIZE;
+    } else if (mip_pdu->mip_header.sdu_type == PING) {
+        // Deserialize regular message payload
+        mip_pdu->sdu.message_payload = (char*)malloc(mip_pdu->mip_header.sdu_len);
+        memcpy(mip_pdu->sdu.message_payload, buffer + offset, mip_pdu->mip_header.sdu_len);
+        offset += mip_pdu->mip_header.sdu_len;
+    }
+
+    return mip_pdu;
+}
+struct mip_pdu* create_mip_pdu( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_mip_addr, char *message){
+
     if(sdu_type==MIP_ARP){
 
     /* HEADER: 
@@ -108,11 +167,19 @@ struct mip_pdu* create_mip_datagram( uint8_t sdu_type, uint8_t arp_type, uint8_t
 
         //filling the pdu
         struct mip_pdu *mip_pdu = malloc(sizeof(struct mip_pdu));
+        memcpy(&mip_pdu->mip_header, header, sizeof(struct mip_header));
+
         mip_pdu->sdu.message_payload = malloc(strlen(message)+1);
         memcpy(mip_pdu->sdu.message_payload, message, strlen(message)+1);
+        
+        printf("pdu test : \n");
+        printf("dst addr %d ", mip_pdu->mip_header.dest_addr);
+        printf("message : %s \n", mip_pdu->sdu.message_payload);
+
 
         return mip_pdu; 
     }
+
     return NULL;
 
 
@@ -120,9 +187,10 @@ struct mip_pdu* create_mip_datagram( uint8_t sdu_type, uint8_t arp_type, uint8_t
 int serve_raw_connection( int raw_socket){
     struct mip_pdu *mip_pdu= malloc(sizeof(struct mip_pdu));
     //srry need to hard code this, short on time
-    mip_pdu->sdu.arp_msg_payload = malloc(ARP_SDU_SIZE);
+    mip_pdu->sdu.arp_msg_payload = malloc(sizeof(uint32_t));
     mip_pdu->sdu.message_payload = malloc(SDU_MESSAGE_MAX_SIZE);
-    recv_raw_packet(raw_socket,mip_pdu, sizeof(struct mip_pdu) + ARP_SDU_SIZE + SDU_MESSAGE_MAX_SIZE );
+
+    recv_raw_packet(raw_socket,mip_pdu, sizeof(struct mip_pdu) + sizeof(uint32_t) + SDU_MESSAGE_MAX_SIZE );
 
    close(raw_socket);
     return 1;
@@ -171,8 +239,8 @@ int serve_unix_connection(struct epoll_event *events,int sock_accept, int raw_so
     if (cache_entry==NULL){
         //create mipheader and packet 
         //struct mip_pdu *pdu = create_mip_datagram(buffer, MIP_ARP, REQUEST);
-        struct mip_pdu *pdu = create_mip_datagram( PING, REQUEST, buffer->dst_mip_addr, buffer->message);
-        printf("pdu message %s \n",  pdu->sdu.message_payload);
+        struct mip_pdu *pdu = create_mip_pdu( PING, REQUEST, buffer->dst_mip_addr, buffer->message);
+        //printf("pdu message %s \n",  pdu->sdu.message_payload);
         send_arp(raw_socket,socket_name,   pdu);
     }
     //if mac in cache we just send the ping directly

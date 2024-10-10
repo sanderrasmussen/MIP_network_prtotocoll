@@ -27,7 +27,7 @@ struct ether_frame {
 
 /* creates and returns a raw socket */
 int setupRawSocket();
-int send_raw_packet(int rawSocket, struct sockaddr_ll *socket_name, char *payload, size_t length, uint8_t dst_mac_addr[6]);
+int send_raw_packet(int rawSocket, struct sockaddr_ll *socket_name, struct mip_pdu *payload, size_t length, uint8_t dst_mac_addr[6]);
 int recv_raw_packet(int rawSocket, struct mip_pdu *buffer, size_t length);
 /*here we loop through all the interfaces looking for an interface with*/
 int get_mac_from_interface(struct sockaddr_ll *socket_name);

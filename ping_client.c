@@ -18,8 +18,8 @@
 #include <ifaddrs.h>	/* getifaddrs */
 #include "Application_layer/unix_socket.h"
 
-//OOOOPPPS , ONLY CHARACTERS IN PING_CLIENT IS ALLOWED. IF YOU PASS A STRING WITH A COMMA (,) OR OTHER SIMILAR CHARS THIS PROGRAM WILL FAIL
-
+//OOOOPPPS , ONLY CHARACTERS IN PING_CLIENT IS ALLOWD. IF YOU PASS A STRING WITH A COMMA (,) OR OTHER SIMILAR CHARS THIS PROGRAM WILL FAIL
+// ops message arg must end on a alfabet char lik ABCDE and so on. Ending on e.g. a whitespace will cause segfault
 
 size_t fill_sdu(struct mip_client_payload *packet,  char *message){
     //use trlen to find the length in bytes and add padding if necesary

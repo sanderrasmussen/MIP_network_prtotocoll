@@ -7,6 +7,7 @@
 #define MIP_HEADER_SIZE 4
 #define ARP_SDU_SIZE 8
 #define SDU_MESSAGE_MAX_SIZE 100
+
 /* In total this structure should only take 32 bits, hopefully*/
 struct mip_header{
     uint8_t dest_addr : 8;
@@ -24,13 +25,14 @@ which can be mip_arp og ping*/
 struct mip_pdu{
     struct mip_header mip_header; //32 bits
     union{
-        struct mip_arp_message *arp_msg_payload; //64 bits
+        struct mip_arp_message *arp_msg_payload; //32 bits
         //we have an add padding function that will add the needed padding
         char *message_payload;//this is the payload, must be 32, divisible by 4. padding can be implemented in an upper layer protocol
     }sdu;
 }__attribute__((packed));
 
 struct mip_pdu* create_mip_datagram( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_mip_addr, char *message);
-
+size_t serialize_pdu(struct mip_pdu *mip_pdu, char* buffer);
+struct mip_pdu* deserialize_pdu(char* buffer, size_t length);
 
 #endif // MIP_H_
