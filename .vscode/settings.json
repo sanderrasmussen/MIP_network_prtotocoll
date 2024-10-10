@@ -9,6 +9,7 @@
         "inet.h": "c",
         "ethernet.h": "c",
         "mipd.h": "c",
-        "string_view": "c"
+        "string_view": "c",
+        "epoll.h": "c"
     }
 }

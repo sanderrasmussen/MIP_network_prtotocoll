@@ -31,7 +31,7 @@ struct mip_pdu{
     }sdu;
 }__attribute__((packed));
 
-struct mip_pdu* create_mip_datagram( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_mip_addr, char *message);
+struct mip_pdu* create_mip_pdu( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_mip_addr, char *message, uint8_t src_address);
 size_t serialize_pdu(struct mip_pdu *mip_pdu, char* buffer);
 struct mip_pdu* deserialize_pdu(char* buffer, size_t length);
 

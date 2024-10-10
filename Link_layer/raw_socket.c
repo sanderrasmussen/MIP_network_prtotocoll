@@ -63,7 +63,7 @@ int setupRawSocket(){
     return raw_sockfd;
 }
 
-int send_raw_packet(int rawSocket, struct sockaddr_ll *socket_name, struct mip_pdu *pdu, size_t length, uint8_t dst_mac_addr[6]){
+int send_raw_packet(int rawSocket, struct sockaddr_ll *socket_name, struct mip_pdu *pdu, size_t pdu_length, uint8_t *dst_mac_addr){
     int status;
     struct ether_frame ether_frame_header;
     /* msgheader is what we send over link layer*/
@@ -72,7 +72,7 @@ int send_raw_packet(int rawSocket, struct sockaddr_ll *socket_name, struct mip_p
     struct iovec msgvec[2];
 
     //serialize pdu
-    char *serilzd_pdu=malloc(length);
+    char *serilzd_pdu=malloc(pdu_length);
     serialize_pdu(pdu,serilzd_pdu);
 
     // fill out the ether frame
@@ -88,7 +88,7 @@ ether_frame_header.eth_proto[1] = ETH_P_MIP & 0xFF;         // Lavbyte
     msgvec[0].iov_len = sizeof(struct ether_frame);
     //payload
     msgvec[1].iov_base = serilzd_pdu;
-    msgvec[1].iov_len = length;
+    msgvec[1].iov_len = pdu_length;
 
     message = (struct msghdr *) calloc(1, sizeof(struct msghdr));
     //filling out rest of messageheader data
@@ -97,7 +97,7 @@ ether_frame_header.eth_proto[1] = ETH_P_MIP & 0xFF;         // Lavbyte
     message->msg_iov = msgvec;
     message->msg_iovlen =2;//only ether frame and payload
 
-    printf("sending message ");
+    printf("sending message \n ");
     /* now everything should be filled out and we can send the message, which contains everything above*/
     status= sendmsg(rawSocket, message, 0);
     if (status==-1){
@@ -105,11 +105,12 @@ ether_frame_header.eth_proto[1] = ETH_P_MIP & 0xFF;         // Lavbyte
         perror("failed at sending raw packet");
         exit(1);
     }
+    printf(" message sent \n ");
 
     free(message);
     return 1;
 }
-struct mip_pdu * recv_pdu_from_raw(int rawSocket){
+struct mip_pdu * recv_pdu_from_raw(int rawSocket, uint8_t *src_mac_addre){ // the src mac addr is the buffer we store the mac address of the sender in so that we can cache the mip and mac
     int status;
     size_t pdu_length = sizeof(uint64_t)+ 100; //hardcoded sadly
     struct mip_pdu *pdu = malloc(sizeof(pdu_length));
@@ -134,25 +135,26 @@ struct mip_pdu * recv_pdu_from_raw(int rawSocket){
     message.msg_iov = msgvec;
     message.msg_iovlen = 2;
 
-    printf("receiving packet \n");
-
     // Receive the raw packet
     status = recvmsg(rawSocket, &message, 0);
     if (status == -1) {
         perror("Could not receive raw socket message");
         return -1;  // Avoid exiting, return error code instead
     }
-        printf("received packet \n");
- 
+    printf("received packet \n");
+    //store sender mac in buffer
+    memcpy(src_mac_addre, ethernet_frame_header.src_addr,6);
     //derserialize pdu buffer
     pdu = deserialize_pdu(serilzd_pdu, pdu_length);
-
-    
     print_mac_addr(ethernet_frame_header.src_addr, 6);  // Print source MAC address
-        printf(" src mip addresse  : %d \n ",  pdu->mip_header.src_addr);
+    printf(" src mip addresse  : %d \n ",  pdu->mip_header.src_addr);
+
+    if(pdu->mip_header.sdu_type==MIP_ARP){
+        printf("Received mip Arp :who has : %d \n ", pdu->sdu.arp_msg_payload->address);
+    }
+    else{
     printf(" message : %s \n ", pdu->sdu.message_payload);
-    
-    printf("        pakke mottat   \n ");
+    }
     
     return pdu;
 }
@@ -206,8 +208,16 @@ int send_arp(int raw_socket, struct sockaddr_ll *socket_name, struct mip_pdu *mi
     free(message_header);
     return 1;
 }
-int send_arp_response(){
-    
+int send_arp_response(int rawSocket, struct sockaddr_ll *socket_name, struct mip_pdu *received_pdu, size_t length, uint8_t *dst_mac_addr, uint8_t *self_mip_addr){
+    /* create mip pdu first of type ARP RESPONSE , the message argument does not matter here*/
+    struct mip_pdu *pdu = create_mip_pdu(MIP_ARP, RESPONSE, received_pdu->mip_header.src_addr, "ARP RESPONSE",self_mip_addr);
+    if(pdu==NULL){
+        perror("making response arp pdu ");
+        return -1;
+    }
+    send_raw_packet(rawSocket,socket_name, pdu, length, dst_mac_addr);
+    printf(" ARP RESPONSE packet sent \n");
+    return 1;
 }
 
 int handle_arp_packet(int raw_sock ,struct mip_pdu *arp_message ){

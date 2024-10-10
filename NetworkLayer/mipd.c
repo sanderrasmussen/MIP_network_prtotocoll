@@ -1,5 +1,5 @@
 #define ETH_P_MIP 0x88B5
-#define MIP_ADDRESS 25
+#define MIP_ADDRESS 20
 #define MAX_MESSAGE_SIZE 1024
 #define PDU_MESSAGE_BLOCK_SIZE 4 //reading 4 bytes/ 32bits at a time
 
@@ -92,7 +92,7 @@ struct mip_pdu* deserialize_pdu(char* buffer, size_t length) {
 
     return mip_pdu;
 }
-struct mip_pdu* create_mip_pdu( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_mip_addr, char *message){
+struct mip_pdu* create_mip_pdu( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_mip_addr, char *message, uint8_t src_address){
 
     if(sdu_type==MIP_ARP){
 
@@ -110,7 +110,7 @@ struct mip_pdu* create_mip_pdu( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_
             exit(EXIT_FAILURE);
         }
         header->dest_addr = dst_mip_addr;
-        header->src_addr = MIP_ADDRESS;
+        header->src_addr = src_address;
         header->ttl= 1; //recommended to set to one according to exam text
         header->sdu_type= sdu_type; //can be ping or arp, in this case it is arp
         header->sdu_len = sizeof(uint32_t);
@@ -160,7 +160,7 @@ struct mip_pdu* create_mip_pdu( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_
         }
 
         header->dest_addr = dst_mip_addr;
-        header->src_addr = MIP_ADDRESS;
+        header->src_addr = src_address;
         header->ttl= 1; //recommended to set to one according to exam text
         header->sdu_type= sdu_type; //can be ping or arp, in this case it is arp
         header->sdu_len = strlen(message); //size of message, since we have PING type here
@@ -182,14 +182,26 @@ struct mip_pdu* create_mip_pdu( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_
 
     return NULL;
 
-
 }
-int serve_raw_connection( int raw_socket){
-    struct mip_pdu * mip_pdu = recv_pdu_from_raw(raw_socket);
+int serve_raw_connection( int raw_socket, struct sockaddr_ll *socket_name, uint8_t self_mip_addr, struct cache *cache){
+    uint8_t src_mac_addr[6]; 
+    struct mip_pdu * mip_pdu = recv_pdu_from_raw(raw_socket, src_mac_addr);
     //this is the interesting part, because now we need to answer if we have the mip address and send response back
     if(mip_pdu->mip_header.sdu_type==MIP_ARP){
-        printf("received ARP");
-        send_arp_response(); 
+        printf("received ARP from :");
+        print_mac_addr(src_mac_addr, 6); 
+        printf(" testes ");
+        uint8_t requested_address = mip_pdu->sdu.arp_msg_payload->address;
+        //printf(" , the requested address is %d \n ", requested_address);
+        //printf(" our address is : %d \n ", self_mip_addr);
+        if(requested_address == self_mip_addr){
+            printf(" mac : ");
+            print_mac_addr(src_mac_addr, 6);
+            print(" wants our address \n "); 
+            send_arp_response(raw_socket, socket_name, mip_pdu, 164, src_mac_addr, self_mip_addr); 
+            // add the sender host to cache
+            add_to_cache(cache, mip_pdu->mip_header.src_addr , src_mac_addr);
+        }
     }
     else{
         printf("===Received message from %d === \n", mip_pdu->mip_header.src_addr);
@@ -199,6 +211,7 @@ int serve_raw_connection( int raw_socket){
     return 1;
    
 }
+
 int serve_unix_connection(struct epoll_event *events,int sock_accept, int raw_socket, struct sockaddr_ll *socket_name, struct cache *cache){
     /* an already existing client is trying to send packets*/
     struct mip_client_payload *buffer=malloc(sizeof(struct mip_client_payload));
@@ -242,7 +255,7 @@ int serve_unix_connection(struct epoll_event *events,int sock_accept, int raw_so
     if (cache_entry==NULL){
         //create mipheader and packet 
         //struct mip_pdu *pdu = create_mip_datagram(buffer, MIP_ARP, REQUEST);
-        struct mip_pdu *pdu = create_mip_pdu( PING, REQUEST, buffer->dst_mip_addr, buffer->message);
+        struct mip_pdu *pdu = create_mip_pdu( MIP_ARP, REQUEST, buffer->dst_mip_addr, buffer->message, buffer->dst_mip_addr);
         //printf("pdu message %s \n",  pdu->sdu.message_payload);
         send_arp(raw_socket,socket_name,   pdu);
     }
@@ -262,7 +275,7 @@ int serve_unix_connection(struct epoll_event *events,int sock_accept, int raw_so
 };
 
 
-void handle_events(int socket,int raw_socket, struct sockaddr_ll *socket_name, struct cache *cache){
+void handle_events(int socket,int raw_socket, struct sockaddr_ll *socket_name, struct cache *cache, uint8_t self_mip_addr){
     int status, readyIOs;
     struct epoll_event event, events[10];//10 is max events
     int epoll_socket;
@@ -316,7 +329,7 @@ void handle_events(int socket,int raw_socket, struct sockaddr_ll *socket_name, s
             }
             //handle raw socket connections, like arp broadcasts and so on
             else if(events[i].data.fd== raw_socket){
-                serve_raw_connection(events[i].data.fd);
+                serve_raw_connection(events[i].data.fd, socket_name, self_mip_addr, cache );
             }
             //someone is connected to unix socket and wants to send data
             else{
@@ -328,6 +341,8 @@ void handle_events(int socket,int raw_socket, struct sockaddr_ll *socket_name, s
 
 
 int main(int argc, char *argv[]){ 
+    uint8_t self_mip_addr=20;
+    
     struct cache* cache= malloc(sizeof(struct cache));
     int raw_socket;
     struct sockaddr_ll *socket_name=malloc(sizeof(struct sockaddr_ll));
@@ -351,7 +366,7 @@ int main(int argc, char *argv[]){
     unix_data_socket = unixSocket_bind(unix_connection_socket, pathToSocket, address );
     status = unixSocket_listen( unix_connection_socket, buffer, unix_data_socket);
 
-    handle_events(unix_connection_socket,raw_socket, socket_name, cache);
+    handle_events(unix_connection_socket,raw_socket, socket_name, cache, self_mip_addr);
 
     close(raw_socket);
     close(unix_connection_socket);
