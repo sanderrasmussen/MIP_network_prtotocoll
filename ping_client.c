@@ -61,13 +61,17 @@ int main(int argc, char *argv[]){
     char *unix_socket_path ;
     uint8_t dst_mip_addr;
     uint8_t arg;
-    uint8_t h_option ;
+    char *h_option ;
     struct mip_client_payload *packet = malloc(sizeof(struct mip_client_payload));
     size_t total_message_length_inc_padding ;
     if(packet==NULL){
         perror("could not malloc packet ");
         exit(EXIT_FAILURE);
     }
+    if (argc < 3) {
+    fprintf(stderr, "Usage: %s [-d] <socketPath> <self_mip_addr>\n", argv[0]);
+    exit(EXIT_FAILURE);
+}
     if (argc == 4){
         unix_socket_path = argv[1];
         packet->dst_mip_addr = (uint8_t)atoi(argv[2]);

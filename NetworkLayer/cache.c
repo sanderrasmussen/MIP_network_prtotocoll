@@ -31,7 +31,7 @@ struct entry* get_mac_from_cache(struct cache *cache, uint8_t mip_address){
     return NULL;
 }
 // to be implemented
-int add_to_cache(struct cache *cache, uint8_t mip_address, uint8_t mac_address ){
+int add_to_cache(struct cache *cache, uint8_t mip_address, uint8_t *mac_address ){
     struct entry *newEntry= malloc(sizeof(struct entry));
     if (newEntry==NULL){
         perror("Allocate cache entry memory in add to cache function");
@@ -50,4 +50,31 @@ int add_to_cache(struct cache *cache, uint8_t mip_address, uint8_t mac_address )
     }
 
     return 1;
+
+
+}
+int add_pdu_to_queue(struct cache * cache ,uint8_t mip_address , struct mip_pdu* pdu){
+     struct entry *current= cache->head;
+
+    while(current!=NULL){
+        if (current->mip_address==mip_address){
+            current->queued_pdu_not_yet_sent= pdu;
+            return 1;
+        }
+        current= current->next;
+    }
+    return -1;
+}
+struct mip_pdu *fetch_queued_pdu_in_cache(struct cache *cache , uint8_t mip_address){
+    struct entry *current= cache->head;
+
+    while(current!=NULL){
+        if (current->mip_address==mip_address && current->queued_pdu_not_yet_sent==NULL){
+            struct mip_pdu* pdu = current->queued_pdu_not_yet_sent;
+            current->queued_pdu_not_yet_sent=NULL;
+            return pdu;
+        }
+        current= current->next;
+    }
+    return NULL;
 }

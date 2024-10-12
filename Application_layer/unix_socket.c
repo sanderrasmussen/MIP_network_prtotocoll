@@ -129,11 +129,13 @@ int close_unix_socket(int socket, char *socketname){
 
 int add_to_epoll_table(int epoll_socket, struct epoll_event *event, int socket){
 	int status = 0;
-	event->events = EPOLLIN;
+	//event->events = EPOLLIN|EPOLLHUP;
+    event->events = EPOLLIN;
 	event->data.fd = socket;
 	if (epoll_ctl(epoll_socket, EPOLL_CTL_ADD, socket, event) == -1) {
 		perror("epoll_ctl");
 		status = -1;
+        exit(EXIT_FAILURE);
 	}
 	return status;
 }
