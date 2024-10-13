@@ -183,7 +183,7 @@ struct mip_pdu* create_mip_pdu( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_
     return NULL;
 
 }
-int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_t self_mip_addr, struct cache *cache, struct ifs_data* ifs) {
+int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_t self_mip_addr, struct cache *cache, struct ifs_data* ifs, int unix_socket) {
     uint8_t src_mac_addr[6];
     struct mip_pdu *mip_pdu = recv_pdu_from_raw(raw_socket, src_mac_addr);
 
@@ -231,13 +231,47 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
             printf(" \n ================================= \n");
         }
     }
+
     else {
-        printf(" \n ================================= \n");
-        printf("    -Received message from %d  \n", mip_pdu->mip_header.src_addr);
-        printf("    -message : %s \n", mip_pdu->sdu.message_payload);
-        printf(" \n ================================= \n");
+    printf(" \n ================================= \n");
+    printf("    -Received message from %d  \n", mip_pdu->mip_header.src_addr);
+    printf("    -message : %s \n", mip_pdu->sdu.message_payload);
+
+    // Beregn korrekt størrelse på bufferet basert på størrelsen på meldingen
+    size_t message_len = strlen(mip_pdu->sdu.message_payload);  // Finn lengden på meldingen
+    size_t buffer_size = sizeof(uint8_t) + message_len + 1;     // +1 for null-terminator
+
+    // Alloker dynamisk buffer for å holde dst_mip_addr og meldingen
+    char *buffer_to_server = malloc(buffer_size);
+    if (buffer_to_server == NULL) {
+        perror("malloc for buffer_to_server failed");
+        return -1;
     }
-    //printf("exiting serve raw \n ") ;
+
+    // Kopier src_addr til en midlertidig variabel
+    uint8_t src_addr = mip_pdu->mip_header.src_addr;
+
+    // Kopier src_addr til bufferet
+    memcpy(buffer_to_server, &src_addr, sizeof(uint8_t));
+
+    // Kopier meldingen etter src_addr
+    memcpy(buffer_to_server + sizeof(uint8_t), mip_pdu->sdu.message_payload, message_len + 1);  // Inkluder null-terminator
+
+    // Send melding til server via Unix-socket
+    int status = unixSocket_send(unix_socket, buffer_to_server, buffer_size);
+    if (status < 0) {
+        perror("send to server");
+        free(buffer_to_server);  // Frigjør buffer før exit
+        return -1;
+    }
+
+    printf("\n-----------sending to server app---------------\n");
+    printf(" \n ================================= \n");
+
+    // Frigjør bufferet etter bruk
+    free(buffer_to_server);
+}
+
     return 1;
 }
 int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, uint8_t self_mip_addr, struct ifs_data *ifs) {
@@ -328,7 +362,7 @@ void handle_events(int unix_socket, struct ifs_data *ifs, struct cache *cache, u
                 // Håndtere hendelser på raw sockets
                 for (int j = 0; j < ifs->ifn; j++) {
                     if (events[i].data.fd == ifs->rsock[j]) {
-                        serve_raw_connection(ifs->rsock[j], &(ifs->addr[j]), self_mip_addr, cache, ifs);
+                        serve_raw_connection(ifs->rsock[j], &(ifs->addr[j]), self_mip_addr, cache, ifs, unix_socket );
                     }
                 }
             }

@@ -109,7 +109,7 @@ int unixSocket_send(int unix_data_socket, struct mip_client_payload *payload,siz
     if (status == -1) {
         perror("Error: unix socket write");
         free(packet_buffer); // Frigjør minne før exit
-        exit(EXIT_FAILURE);
+        return -1;
     }
 
     free(packet_buffer); // Frigjør minnet etter sending
