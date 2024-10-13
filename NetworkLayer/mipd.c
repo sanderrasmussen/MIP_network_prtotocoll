@@ -183,248 +183,202 @@ struct mip_pdu* create_mip_pdu( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_
     return NULL;
 
 }
-int serve_raw_connection( int raw_socket, struct sockaddr_ll *socket_name, uint8_t self_mip_addr, struct cache *cache, struct ifs_data* ifs){
-    uint8_t src_mac_addr[6]; 
-    struct mip_pdu * mip_pdu = recv_pdu_from_raw(raw_socket, src_mac_addr);
+int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_t self_mip_addr, struct cache *cache, struct ifs_data* ifs) {
+    uint8_t src_mac_addr[6];
+    struct mip_pdu *mip_pdu = recv_pdu_from_raw(raw_socket, src_mac_addr);
 
-    //this is the interesting part, because now we need to answer if we have the mip address and send response back
-    if(mip_pdu->mip_header.sdu_type==MIP_ARP ){
-
-        if (mip_pdu->sdu.arp_msg_payload->type==REQUEST){
+    // Dette er den interessante delen der vi svarer på ARP eller sender meldinger tilbake
+    if (mip_pdu->mip_header.sdu_type == MIP_ARP) {
+        if (mip_pdu->sdu.arp_msg_payload->type == REQUEST) {
             printf("received ARP REQUEST from :");
-            print_mac_addr(src_mac_addr, 6); 
+            print_mac_addr(src_mac_addr, 6);
 
             uint8_t requested_address = mip_pdu->sdu.arp_msg_payload->address;
-            //printf(" , the requested address is %d \n ", requested_address);
-            //printf(" our address is : %d \n ", self_mip_addr);
-            if(requested_address == self_mip_addr){
-                printf(" the arp wants our address \n "); 
-                send_arp_response(raw_socket, mip_pdu, 164, src_mac_addr, self_mip_addr, ifs); 
-                // add the sender host to cache
-                add_to_cache(cache, mip_pdu->mip_header.src_addr , src_mac_addr);
+            if (requested_address == self_mip_addr) {
+                printf(" the arp wants our address \n ");
+                send_arp_response(raw_socket, mip_pdu, 164, src_mac_addr, self_mip_addr, ifs);
+                // Legg til senderen i cachen
+                add_to_cache(cache, mip_pdu->mip_header.src_addr, src_mac_addr);
                 printf(" added entry to cache \n");
-            }
-            else{
+            } else {
                 printf("not our address \n");
             }
         }
-   
-        if (mip_pdu->sdu.arp_msg_payload->type==RESPONSE){
+
+        if (mip_pdu->sdu.arp_msg_payload->type == RESPONSE) {
             printf("received ARP RESPONSE from :");
-            print_mac_addr(src_mac_addr, 6); 
-            //we got a response, add to cache and resend message
-            add_to_cache(cache, mip_pdu->mip_header.src_addr , src_mac_addr);
+            print_mac_addr(src_mac_addr, 6);
+            add_to_cache(cache, mip_pdu->mip_header.src_addr, src_mac_addr);
             printf("added entry to cache \n");
-            // we got a response, we look in the cache if there is an unsent pdu, if the case we send a PING
-            struct mip_pdu * unsent_pdu=fetch_queued_pdu_in_cache(cache, mip_pdu->mip_header.src_addr );
-            if(unsent_pdu==NULL){
+
+            struct mip_pdu *unsent_pdu = fetch_queued_pdu_in_cache(cache, mip_pdu->mip_header.src_addr);
+            if (unsent_pdu == NULL) {
                 printf("could not fetch unsent pdu \n ");
                 return -1;
             }
-            send_raw_packet(raw_socket,unsent_pdu,src_mac_addr, ifs);
+            send_raw_packet(raw_socket, unsent_pdu, src_mac_addr, ifs);
             printf(" unsent pdu that was on hold is now sent \n");
         }
-    }
-    else{
+    } else {
         printf("===Received message from %d === \n", mip_pdu->mip_header.src_addr);
-        printf( "===message : %s === \n", mip_pdu->sdu.message_payload);
+        printf("===message : %s === \n", mip_pdu->sdu.message_payload);
     }
     close(raw_socket);
     return 1;
-   
 }
 
-int serve_unix_connection(int sock_accept, int raw_socket, struct sockaddr_ll *socket_name, struct cache *cache, uint8_t self_mip_addr, struct ifs_data *ifs){
-    /* an already existing client is trying to send packets*/
-    struct mip_client_payload *buffer=malloc(sizeof(struct mip_client_payload));
-
-    int rc;
+int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, uint8_t self_mip_addr, struct ifs_data *ifs) {
+    /* Håndterer eksisterende klient som sender pakker */
+    struct mip_client_payload *buffer = malloc(sizeof(struct mip_client_payload));
     char recv_buffer[1000];
-    memset(recv_buffer,0,sizeof(100));
-    int bytes_read = read(sock_accept, recv_buffer, 100);
+    memset(recv_buffer, 0, sizeof(recv_buffer));
+
+    int bytes_read = read(sock_accept, recv_buffer, sizeof(recv_buffer));
     if (bytes_read == -1) {
         close(sock_accept);
         perror("read unix sock");
-    return -1;
+        return -1;
     }
+
     size_t message_len = strlen(recv_buffer) - sizeof(uint8_t);
-    buffer->message= malloc(message_len+1);
-    memset(buffer->message, 0, message_len+1);
+    buffer->message = malloc(message_len + 1);
+    memset(buffer->message, 0, message_len + 1);
     memcpy(&(buffer->dst_mip_addr), recv_buffer, sizeof(uint8_t));
-    memcpy(buffer->message , recv_buffer + sizeof(uint8_t),message_len );
-    //printf("bytes read: %d \n" , bytes_read);
-    //printf("buffer content %s \n" , recv_buffer);
-    //printf("message size in bytes : %d", message_len);
+    memcpy(buffer->message, recv_buffer + sizeof(uint8_t), message_len);
 
-    //unpack unix socket message
-    if(buffer->dst_mip_addr==NULL){
-        perror("dst addr mip is not valid ");
-        exit(EXIT_FAILURE);
-    }
+    printf("=== dst mip address: %d === \n", buffer->dst_mip_addr);
+    printf("=== message: %s === \n", buffer->message);
 
-   
-    printf("=== dst mip address: %d === \n", buffer->dst_mip_addr );
-       //unpack unix socket message
-    if(buffer->message==NULL){
-        perror("MIP message is not valid \n");
-        exit(EXIT_FAILURE);
-    }
-    //printf("\n");
-    printf("=== message:%s === \n", buffer->message);
-
-    //check cahce, if empty send arp
-    struct entry *cache_entry= get_mac_from_cache(cache, buffer->dst_mip_addr);
-    if (cache_entry==NULL){
+    struct entry *cache_entry = get_mac_from_cache(cache, buffer->dst_mip_addr);
+    if (cache_entry == NULL) {
         printf("mip address not found in cache, sending arp request \n ");
-        struct mip_pdu *pdu = create_mip_pdu( MIP_ARP, REQUEST, buffer->dst_mip_addr, buffer->message,self_mip_addr);
+        struct mip_pdu *pdu = create_mip_pdu(MIP_ARP, REQUEST, buffer->dst_mip_addr, buffer->message, self_mip_addr);
         uint8_t broadcast_addr[] = BROADCAST_ADDRESS;
-        int arp = send_raw_packet(raw_socket, pdu, broadcast_addr, ifs);
-        //if we have to send an arp, we store unsent pdu in cache entry to be sent when RESPONSE IS RECEIVED, this is because we dont necessaryly know if the host we send to exists
-        add_pdu_to_queue(cache,buffer->dst_mip_addr,pdu);
-        printf("pdu is added in waitng queue, will be sent when response is received \n"); 
-        
+        send_raw_packet(raw_socket, pdu, broadcast_addr, ifs);
+        add_pdu_to_queue(cache, buffer->dst_mip_addr, pdu);
+        printf("pdu is added in waiting queue, will be sent when response is received \n");
+    } else {
+        printf(" MIP address found in cache, sending message \n");
+        struct mip_pdu *pdu = create_mip_pdu(PING, REQUEST, buffer->dst_mip_addr, buffer->message, self_mip_addr);
+        send_raw_packet(raw_socket, pdu, cache_entry->mac_address, ifs);
     }
-    //if mac in cache we just send the ping directly
-    else{
-        printf(" MIP address found in cache , sending message \n");
-        struct mip_pdu *pdu= create_mip_pdu( PING, REQUEST, buffer->dst_mip_addr, buffer->message, buffer->dst_mip_addr);
-        send_raw_packet(raw_socket,  pdu,cache_entry->mac_address, ifs );
-    }
-     
-    printf("\n");
-  
+
     close(sock_accept);
- 
     return 1;
-};
+}
 
-
-void handle_events(int socket,int raw_socket, struct sockaddr_ll *socket_name, struct cache *cache, uint8_t self_mip_addr){
+void handle_events(int unix_socket, struct ifs_data *ifs, struct cache *cache, uint8_t self_mip_addr) {
     int status, readyIOs;
-    struct epoll_event event, events[10];//10 is max events
-    int epoll_socket;
-    int sock_accept;
-
-     struct	ifs_data local_ifs;
-
-    init_ifs(&local_ifs, raw_socket);
-    /* epoll file descriptor for event handlings */
-    printf("printing all mac addresses \n");
-    for (int i = 0; i < local_ifs.ifn; i++) {
-		print_mac_addr(local_ifs.addr[i].sll_addr, 6);
-	}
-
-	epoll_socket = epoll_create1(0);
-	if (epoll_socket == -1) {
-		perror("epoll_create1");
-		close(socket );
-		exit(EXIT_FAILURE);
-	}
-
-    //adding the connection coket to table 
-    status= add_to_epoll_table(epoll_socket, &event,socket);
-    if(status==-1){
-        perror("add to epoll table failed");
+    struct epoll_event event, events[10]; // 10 er maks antall hendelser
+    int epoll_fd = epoll_create1(0);
+    if (epoll_fd == -1) {
+        perror("epoll_create1");
         exit(EXIT_FAILURE);
     }
-    //adding the raw socket to table
-    status = add_to_epoll_table(epoll_socket, &event, raw_socket);
-    if(status==-1){
-        perror("adding raw socket to epol table");
-        exit(EXIT_FAILURE);
+
+    // Legg til unix_socket i epoll
+    add_to_epoll_table(epoll_fd, &event, unix_socket);
+
+    // Legg til alle raw sockets i epoll
+    for (int i = 0; i < ifs->ifn; i++) {
+        add_to_epoll_table(epoll_fd, &event, ifs->rsock[i]);
     }
-    for(;;){
-        readyIOs= epoll_wait(epoll_socket, events, 10, -1);
-        if (readyIOs==-1){
-            perror("epoll wait error");
-            close(socket);
+
+    while (1) {
+        readyIOs = epoll_wait(epoll_fd, events, 10, -1);
+        if (readyIOs == -1) {
+            perror("epoll_wait");
             exit(EXIT_FAILURE);
         }
-        for(int i = 0; i<readyIOs; i++){
 
-            /* If someone is trying to connect to unix socket*/
-            if (events[i].data.fd == socket){
-                sock_accept= accept(events->data.fd,NULL,NULL);
-                if (sock_accept== -1){
-                    perror("error on accept connection");
-                    if (sock_accept== -1){
-                        perror("error on accept connection");
-                        continue;
-                    }
-                status = add_to_epoll_table(epoll_socket, &event , sock_accept);
-                if (status== -1){
-                    close(socket);
-                    perror("add to epoll table error");
-                    exit(EXIT_FAILURE);
+        for (int i = 0; i < readyIOs; i++) {
+            if (events[i].data.fd == unix_socket) {
+                int sock_accept = accept(unix_socket, NULL, NULL);
+                if (sock_accept == -1) {
+                    perror("accept");
+                    continue;
                 }
-        
-            }
-            //handle raw socket connections, like arp broadcasts and so on
-            else if(events[i].data.fd== raw_socket){
-                printf("event on raw socket");
-                serve_raw_connection(events[i].data.fd, socket_name, self_mip_addr, cache, &local_ifs );    
-                
-            }
-            //someone is connected to unix socket and wants to send data
-            else{
-                serve_unix_connection(sock_accept, raw_socket, socket_name, cache, self_mip_addr, &local_ifs);
+                serve_unix_connection(sock_accept, ifs->rsock[0], cache, self_mip_addr, ifs);
+            } else {
+                // Håndtere hendelser på raw sockets
+                for (int j = 0; j < ifs->ifn; j++) {
+                    if (events[i].data.fd == ifs->rsock[j]) {
+                        serve_raw_connection(ifs->rsock[j], &(ifs->addr[j]), self_mip_addr, cache, ifs);
+                    }
+                }
             }
         }
     }
+}
+
+
+int main(int argc, char *argv[]) {
+    uint8_t self_mip_addr;
+    char *d_flag;
+    char *socketPath;
+
+    // Argumentbehandling
+    if (argc == 4) {
+        d_flag = argv[1];
+        socketPath = argv[2];
+        self_mip_addr = (uint8_t)atoi(argv[3]);
+    } else {
+        socketPath = argv[1];
+        self_mip_addr = (uint8_t)atoi(argv[2]);
     }
-};
 
-int main(int argc, char *argv[]){ 
-        uint8_t self_mip_addr;
-        char *d_flag;
-        char *socketPath;
-       
-        
+    printf("own mip addr : %d\n", self_mip_addr);
+    printf("socket path : %s\n", socketPath);
 
-    if (argc == 4){
-        d_flag= argv[1];
-        socketPath= argv[2];
-        self_mip_addr = (uint8_t)atoi(argv[3]);    
+    // Allokere cache
+    struct cache *cache = malloc(sizeof(struct cache));
+    if (cache == NULL) {
+        perror("could not malloc cache");
+        exit(EXIT_FAILURE);
     }
-    //h option flag is passed
-    else{
-        socketPath=argv[1];
-        self_mip_addr = (uint8_t)atoi(argv[2]);    
+
+    // Allokere ifs_data-strukturen for grensesnittene
+    struct ifs_data *ifs = malloc(sizeof(struct ifs_data));
+
+    if (ifs == NULL) {
+        perror("could not malloc ifs_data");
+        exit(EXIT_FAILURE);
     }
-    printf("own mip addr : %d \n", self_mip_addr);
-    printf("socket path : %d \n ", socketPath);
-    struct cache* cache= malloc(sizeof(struct cache));
-    int raw_socket;
-    struct sockaddr_ll *socket_name=malloc(sizeof(struct sockaddr_ll));
-    raw_socket = setupRawSocket();
-    
-    //get_mac_from_interface(socket_name);
 
-    //send_arp(raw_socket, socket_name); //this one will be in handle events later, currenntly here for testing
+    // Initialisere ifs_data-strukturen med grensesnittinformasjon og raw sockets
+    init_ifs(ifs);
 
-    int unix_connection_socket ;
-    int unix_data_socket;
+    // UNIX socket setup
+    int unix_connection_socket, unix_data_socket;
     int status;
-    struct sockaddr_un *address = malloc(sizeof(struct sockaddr_un)) ;
-    if (address==NULL){
+    struct sockaddr_un *address = malloc(sizeof(struct sockaddr_un));
+    if (address == NULL) {
         perror("could not malloc address");
-        exit(0);
+        exit(EXIT_FAILURE);
     }
 
-
-    unlink(socketPath);
-    char *buffer;
+    unlink(socketPath); // Fjerne eventuell eksisterende socket
     unix_connection_socket = setupUnixSocket(socketPath, address);
-    unix_data_socket = unixSocket_bind(unix_connection_socket, socketPath, address );
-    status = unixSocket_listen( unix_connection_socket, buffer, unix_data_socket);
+    unix_data_socket = unixSocket_bind(unix_connection_socket, socketPath, address);
+    status = unixSocket_listen(unix_connection_socket, NULL, unix_data_socket);
+    if (status == -1) {
+        perror("unixSocket_listen failed");
+        exit(EXIT_FAILURE);
+    }
 
-    handle_events(unix_connection_socket,raw_socket, socket_name, cache, self_mip_addr);
+    // Håndtere hendelser (både raw sockets og UNIX sockets)
+    handle_events(unix_connection_socket, ifs, cache, self_mip_addr);
 
-    close(raw_socket);
+    // Rydde opp og lukke sockets
+    for (int i = 0; i < ifs->ifn; i++) {
+        close(ifs->rsock[i]);
+    }
     close(unix_connection_socket);
     close(unix_data_socket);
     unlink(socketPath);
     free(address);
-    exit(1);
-    return 1;
-};
+    free(ifs);
+    free(cache);
+
+    return 0;
+}

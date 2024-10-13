@@ -1,19 +1,22 @@
 #include <stdint.h>
-#include <stdlib.h>	/* free */
-#include <stdio.h>	/* printf */
-#include <unistd.h>	/* fgets */
-#include <string.h>	/* memset */
-#include <sys/socket.h>	/* socket */
-#include <fcntl.h>
-#include <sys/epoll.h>		/* epoll */
-#include <linux/if_packet.h>	/* AF_PACKET */
-#include <net/ethernet.h>	/* ETH_* */
+#include <stdlib.h>	/* free, malloc, exit */
+#include <stdio.h>	/* printf, perror */
+#include <unistd.h>	/* close, ssize_t */
+#include <string.h>	/* memset, memcpy, strlen */
+#include <sys/socket.h>	/* socket, bind, struct msghdr */
+#include <fcntl.h>	/* file control options */
+#include <sys/ioctl.h> /* ioctl */
+#include <sys/epoll.h>	/* epoll */
+#include <linux/if_packet.h>	/* AF_PACKET, struct sockaddr_ll */
+#include <net/ethernet.h>	/* ETH_P_MIP, ETH_P_ALL */
 #include <arpa/inet.h>	/* htons */
-#include <ifaddrs.h>	/* getifaddrs */
-#include "raw_socket.h"
-#include "mip_arp.h"
-#include "../NetworkLayer/mipd.h"
-
+#include <ifaddrs.h>	/* getifaddrs, struct ifaddrs */
+#include <net/if.h>   /* struct ifreq, SIOCGIFINDEX */
+#include <sys/ioctl.h>
+#include <net/if.h>
+#include "raw_socket.h" /* Relevant interfaces from raw_socket.h */
+#include "mip_arp.h" /* Relevant interfaces from mip_arp.h */
+#include "../NetworkLayer/mipd.h" /* Relevant interfaces from mipd.h */
 
 #define ETH_P_MIP 0x88B5
 
@@ -58,15 +61,65 @@ void get_mac_from_interfaces(struct ifs_data *ifs)
 	/* Free the interface list */
 	freeifaddrs(ifaces);
 }
+void bind_socket_to_interface(int sockfd, const char *interface, int protocol) {
+    struct sockaddr_ll sll;
+    struct ifreq ifr;
 
-void init_ifs(struct ifs_data *ifs, int rsock) {
-	/* Get some info about the local ifaces */
-	get_mac_from_interfaces(ifs);
+    // Kopier interface-navnet til ifreq-strukturen
+    strncpy(ifr.ifr_name, interface, IFNAMSIZ);
 
-	/* We use one RAW socket per node */
-	ifs->rsock = rsock;
+    // Hent grensesnittets indeks
+    if (ioctl(sockfd, SIOCGIFINDEX, &ifr) == -1) {
+        perror("Unable to get interface index");
+        close(sockfd);
+        exit(EXIT_FAILURE);
+    }
 
+    // Konfigurer sockaddr_ll for å binde til riktig interface
+    memset(&sll, 0, sizeof(sll));
+    sll.sll_family = AF_PACKET;
+    sll.sll_ifindex = ifr.ifr_ifindex;
+    sll.sll_protocol = htons(protocol);
+
+    // Bind socket til grensesnittet
+    if (bind(sockfd, (struct sockaddr *)&sll, sizeof(sll)) == -1) {
+        perror("Socket binding failed");
+        close(sockfd);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Socket bound to interface %s\n", interface);
 }
+
+void init_ifs(struct ifs_data *ifs) {
+    struct ifaddrs *ifaces, *ifp;
+    int i = 0;
+
+    if (getifaddrs(&ifaces)) {
+        perror("getifaddrs");
+        exit(EXIT_FAILURE);
+    }
+
+    // Opprett en socket per grensesnitt
+    for (ifp = ifaces; ifp != NULL; ifp = ifp->ifa_next) {
+        if (ifp->ifa_addr != NULL &&
+            ifp->ifa_addr->sa_family == AF_PACKET &&
+            strcmp("lo", ifp->ifa_name)) {
+
+            // Opprett socket for hvert grensesnitt
+            int sockfd = setupRawSocket();
+            bind_socket_to_interface(sockfd, ifp->ifa_name, ETH_P_MIP);  // Bind socket til grensesnitt
+
+            // Lagre socket og adresseinformasjon i ifs_data
+            ifs->rsock[i] = sockfd;
+            memcpy(&(ifs->addr[i]), (struct sockaddr_ll *)ifp->ifa_addr, sizeof(struct sockaddr_ll));
+            i++;
+        }
+    }
+    ifs->ifn = i;  // Antall grensesnitt
+    freeifaddrs(ifaces);
+}
+
 
 /* creates and returns a raw socket */
 int setupRawSocket(){

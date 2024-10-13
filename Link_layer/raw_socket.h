@@ -19,6 +19,7 @@
 #define ETH_P_MIP 0x88B5
 #define MAX_EVENTS	10
 #define MAX_IF		3
+#define MAX_INTERFACES 10
 
 struct ether_frame {
 	uint8_t dst_addr[6];
@@ -28,10 +29,11 @@ struct ether_frame {
 } __attribute__((packed));
 
 struct ifs_data {
-	struct sockaddr_ll addr[MAX_IF];
-	int rsock;
-	int ifn;
+    struct sockaddr_ll addr[MAX_INTERFACES];
+    int rsock[MAX_INTERFACES]; // Socket for hvert grensesnitt
+    int ifn;  // Antall grensesnitt
 };
+
 
 /* creates and returns a raw socket */
 int setupRawSocket();
@@ -43,7 +45,7 @@ void print_mac_addr(uint8_t *addr, size_t len);
 
 void get_mac_from_interfaces(struct ifs_data *);
 
-void init_ifs(struct ifs_data *ifs, int rsock);
+void init_ifs(struct ifs_data *ifs);
 
 int send_raw_packet(int raw_socket, struct mip_pdu *mip_pdu, uint8_t *dst_mac_address, struct ifs_data *ifs);
 int send_arp_response(int rawSocket,  struct mip_pdu *received_pdu, size_t length, uint8_t *dst_mac_addr, uint8_t *self_mip_addr, struct ifs_data *ifs);
