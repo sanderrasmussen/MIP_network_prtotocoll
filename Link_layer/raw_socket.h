@@ -45,7 +45,7 @@ void get_mac_from_interfaces(struct ifs_data *);
 
 void init_ifs(struct ifs_data *ifs, int rsock);
 
-int send_raw_packet(int raw_socket, struct sockaddr_ll *socket_name, struct mip_pdu *mip_pdu, uint8_t *dst_mac_address, struct ifs_data *ifs);
-int send_arp_response(int rawSocket, struct sockaddr_ll *socket_name, struct mip_pdu *received_pdu, size_t length, uint8_t *dst_mac_addr, uint8_t *self_mip_addr, struct ifs_data *ifs);
+int send_raw_packet(int raw_socket, struct mip_pdu *mip_pdu, uint8_t *dst_mac_address, struct ifs_data *ifs);
+int send_arp_response(int rawSocket,  struct mip_pdu *received_pdu, size_t length, uint8_t *dst_mac_addr, uint8_t *self_mip_addr, struct ifs_data *ifs);
 
 #endif

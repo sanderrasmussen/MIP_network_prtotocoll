@@ -82,13 +82,13 @@ def init_he1(self, line):
     # Run ping_clients on Hosts A and C
     terms.append(openTerm(self,
                           node=A,
-                          title="Client [B]",
+                          title="Client [C]",
                           geometry="80x20+0+300",
                           cmd="./ping_client usockB 10 \"Hello IN3230n\""))
     time.sleep(3)
     terms.append(openTerm(self,
                         node=A,
-                        title="Client [B]",
+                        title="Client [A]",
                         geometry="80x20+0+300",
                         cmd="./ping_client usockB 30 \"Hello IN3230n\""))
 

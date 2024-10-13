@@ -59,13 +59,13 @@ void get_mac_from_interfaces(struct ifs_data *ifs)
 	freeifaddrs(ifaces);
 }
 
-void init_ifs(struct ifs_data *ifs, int rsock)
-{
-	/* Walk through the interface list */
+void init_ifs(struct ifs_data *ifs, int rsock) {
+	/* Get some info about the local ifaces */
 	get_mac_from_interfaces(ifs);
 
 	/* We use one RAW socket per node */
 	ifs->rsock = rsock;
+
 }
 
 /* creates and returns a raw socket */
@@ -130,7 +130,7 @@ struct mip_pdu * recv_pdu_from_raw(int rawSocket, uint8_t *src_mac_addre){ // th
 }
 
 
-int send_raw_packet(int raw_socket, struct sockaddr_ll *socket_name, struct mip_pdu *mip_pdu, uint8_t *dst_mac_address, struct ifs_data *ifs){
+int send_raw_packet(int raw_socket, struct mip_pdu *mip_pdu, uint8_t *dst_mac_address, struct ifs_data *ifs){
 
     struct ether_frame ethernet_header;
     struct msghdr *message_header;
@@ -161,7 +161,7 @@ int send_raw_packet(int raw_socket, struct sockaddr_ll *socket_name, struct mip_
     
     message_header = (struct msghdr *)calloc(1, sizeof(struct msghdr));
 
-    message_header->msg_name = socket_name ;
+    message_header->msg_name = &(ifs->addr[0]);
     message_header->msg_namelen = sizeof(struct sockaddr_ll);
     message_header->msg_iov = ioVector;
     message_header->msg_iovlen = 2;
@@ -180,7 +180,7 @@ int send_raw_packet(int raw_socket, struct sockaddr_ll *socket_name, struct mip_
     free(message_header);
     return 1;
 }
-int send_arp_response(int rawSocket, struct sockaddr_ll *socket_name, struct mip_pdu *received_pdu, size_t length, uint8_t *dst_mac_addr, uint8_t *self_mip_addr, struct ifs_data *ifs){
+int send_arp_response(int rawSocket,  struct mip_pdu *received_pdu, size_t length, uint8_t *dst_mac_addr, uint8_t *self_mip_addr, struct ifs_data *ifs){
     /* create mip pdu first of type ARP RESPONSE , the message argument does not matter here*/
     received_pdu->sdu.arp_msg_payload->type= RESPONSE;
     uint8_t sender_mip_addr = received_pdu->mip_header.src_addr;
@@ -193,7 +193,7 @@ int send_arp_response(int rawSocket, struct sockaddr_ll *socket_name, struct mip
 
     printf("sending arp response, packet contents : ");
     printf(" arp packet addr %d \n", received_pdu->sdu.arp_msg_payload->address);
-    send_raw_packet(rawSocket,socket_name, received_pdu, dst_mac_addr, ifs);
+    send_raw_packet(rawSocket, received_pdu, dst_mac_addr, ifs);
     printf(" ARP RESPONSE packet sent to  ");
     print_mac_addr(dst_mac_addr, 6);
     printf('\n');
