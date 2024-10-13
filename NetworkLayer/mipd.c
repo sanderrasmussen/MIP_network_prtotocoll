@@ -155,7 +155,7 @@ struct mip_pdu* create_mip_pdu( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_
         struct mip_header *header = malloc(sizeof(struct mip_header));
         //filling the header values
         if (dst_mip_addr==NULL){
-            perror("client packet is null ");
+            perror("client packet is null \n ");
             exit(EXIT_FAILURE);
         }
 
@@ -172,8 +172,8 @@ struct mip_pdu* create_mip_pdu( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_
         mip_pdu->sdu.message_payload = malloc(strlen(message)+1);
         memcpy(mip_pdu->sdu.message_payload, message, strlen(message)+1);
         
-        printf("pdu test : \n");
-        printf("dst addr %d ", mip_pdu->mip_header.dest_addr);
+        //printf("pdu test : \n");
+        //printf("dst addr %d ", mip_pdu->mip_header.dest_addr);
     
 
 
@@ -190,24 +190,27 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
     // Dette er den interessante delen der vi svarer på ARP eller sender meldinger tilbake
     if (mip_pdu->mip_header.sdu_type == MIP_ARP) {
         if (mip_pdu->sdu.arp_msg_payload->type == REQUEST) {
+            printf(" \n ================================= \n");
             printf("received ARP REQUEST from :");
             print_mac_addr(src_mac_addr, 6);
 
             uint8_t requested_address = mip_pdu->sdu.arp_msg_payload->address;
             if (requested_address == self_mip_addr) {
-                printf(" the arp wants our address \n ");
+                printf("    -the arp wants our address \n ");
                 
                 send_arp_response(raw_socket, mip_pdu, 164, src_mac_addr, self_mip_addr, socket_name);
                 // Legg til senderen i cachen
       
                 add_to_cache(cache, mip_pdu->mip_header.src_addr, src_mac_addr, socket_name);
-                printf(" added entry to cache \n");
+                printf("    -added entry to cache \n");
             } else {
                 printf("not our address \n");
             }
+            printf(" \n ================================= \n");
         }
 
         else if (mip_pdu->sdu.arp_msg_payload->type == RESPONSE) {
+            printf(" \n ================================= \n");
             printf("received ARP RESPONSE from :");
             print_mac_addr(src_mac_addr, 6);
             add_to_cache(cache, mip_pdu->mip_header.src_addr, src_mac_addr, socket_name);
@@ -225,13 +228,16 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
             }
             send_raw_packet(raw_socket, unsent_pdu, src_mac_addr, socket_name);
             printf(" unsent pdu that was on hold is now sent \n");
+            printf(" \n ================================= \n");
         }
     }
     else {
-        printf("===Received message from %d === \n", mip_pdu->mip_header.src_addr);
-        printf("===message : %s === \n", mip_pdu->sdu.message_payload);
+        printf(" \n ================================= \n");
+        printf("    -Received message from %d  \n", mip_pdu->mip_header.src_addr);
+        printf("    -message : %s \n", mip_pdu->sdu.message_payload);
+        printf(" \n ================================= \n");
     }
-    printf("exiting serve raw \n ") ;
+    //printf("exiting serve raw \n ") ;
     return 1;
 }
 int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, uint8_t self_mip_addr, struct ifs_data *ifs) {
@@ -239,7 +245,7 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
     struct mip_client_payload *buffer = malloc(sizeof(struct mip_client_payload));
     char recv_buffer[1000];
     memset(recv_buffer, 0, sizeof(recv_buffer));
-
+    printf(" \n ================================= \n");
     int bytes_read = read(sock_accept, recv_buffer, sizeof(recv_buffer));
     if (bytes_read == -1) {
         close(sock_accept);
@@ -253,8 +259,8 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
     memcpy(&(buffer->dst_mip_addr), recv_buffer, sizeof(uint8_t));
     memcpy(buffer->message, recv_buffer + sizeof(uint8_t), message_len);
 
-    printf("=== dst mip address: %d === \n", buffer->dst_mip_addr);
-    printf("=== message: %s === \n", buffer->message);
+    printf("    -dst mip address: %d  \n", buffer->dst_mip_addr);
+    printf("    -message: %s  \n", buffer->message);
 
     struct entry *cache_entry = get_mac_from_cache(cache, buffer->dst_mip_addr);
     if (cache_entry == NULL || cache_entry->mac_address == NULL || cache_entry->if_addr == NULL) {
@@ -280,7 +286,7 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
         struct mip_pdu *pdu = create_mip_pdu(PING, REQUEST, buffer->dst_mip_addr, buffer->message, self_mip_addr);
         send_raw_packet(raw_socket, pdu, cache_entry->mac_address, cache_entry->if_addr);
     }
-
+    printf(" \n ================================= \n");
     close(sock_accept);
     return 1;
 }
