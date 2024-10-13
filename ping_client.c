@@ -1,112 +1,119 @@
-#define MAX_MESSAGE_SIZE 100
 #include <stdio.h>
 #include <sys/socket.h>
 #include <stdlib.h>
 #include <sys/un.h>
 #include <sys/stat.h>
 #include <stdint.h>
-#include <stdlib.h>	/* free */
-#include <stdio.h>	/* printf */
-#include <unistd.h>	/* fgets */
-#include <string.h>	/* memset */
-#include <sys/socket.h>	/* socket */
+#include <stdlib.h>  /* free */
+#include <stdio.h>   /* printf */
+#include <unistd.h>  /* fgets */
+#include <string.h>  /* memset */
+#include <sys/socket.h>  /* socket */
 #include <fcntl.h>
-#include <sys/epoll.h>		/* epoll */
-#include <linux/if_packet.h>	/* AF_PACKET */
-#include <net/ethernet.h>	/* ETH_* */
-#include <arpa/inet.h>	/* htons */
-#include <ifaddrs.h>	/* getifaddrs */
+#include <sys/epoll.h>    /* epoll */
+#include <linux/if_packet.h>  /* AF_PACKET */
+#include <net/ethernet.h> /* ETH_* */
+#include <arpa/inet.h> /* htons */
+#include <ifaddrs.h>   /* getifaddrs */
 #include "Application_layer/unix_socket.h"
 
-//OOOOPPPS , ONLY CHARACTERS IN PING_CLIENT IS ALLOWD. IF YOU PASS A STRING WITH A COMMA (,) OR OTHER SIMILAR CHARS THIS PROGRAM WILL FAIL
-// ops message arg must end on a alfabet char lik ABCDE and so on. Ending on e.g. a whitespace will cause segfault
+#define MAX_EVENTS 10
 
-size_t fill_sdu(struct mip_client_payload *packet,  char *message){
-    //use trlen to find the length in bytes and add padding if necesary
-    /* I assume that the sdu will only contain the message string*/
-    size_t message_len = strlen(message);
-    size_t padding_needed = 4 - message_len % 4;
-    printf(" padding needed : %d ", padding_needed);
-    size_t total_message_alloc_size= padding_needed + message_len;
+// Funksjon for å sende ping-melding til MIP daemon
+void send_ping_message(int unix_socket, uint8_t dst_mip_addr, const char *message) {
+    struct mip_client_payload payload;
+    payload.dst_mip_addr = dst_mip_addr;
+    payload.message = message;
 
-    if(message_len%4==0){
-        packet->message=calloc(total_message_alloc_size +1, sizeof(char));
-        if(packet->message==NULL){
-            perror("could not calloc sdu");
+    // Send meldingen til MIP daemon
+    unixSocket_send(unix_socket, &payload, strlen(payload.message));
+  // Frigjør minne etter bruk
+}
+
+// Funksjon for å motta svar fra MIP daemon
+void handle_response(int client_fd) {
+    // Motta svaret fra MIP daemon
+    struct mip_client_payload received_payload;
+    char buffer[256];
+    memset(buffer, 0, sizeof(buffer));
+
+    int bytes_read = read(client_fd, buffer, sizeof(buffer));
+    if (bytes_read > 0) {
+        received_payload.dst_mip_addr = buffer[0]; // Første byte er dst_mip_addr
+        received_payload.message = buffer + 1;     // Meldingen følger etter dst_mip_addr
+
+        printf("Received response from MIP daemon: %s\n", received_payload.message);
+    } else if (bytes_read == 0) {
+        printf("MIP daemon disconnected\n");
+    } else {
+        perror("Error reading from socket");
+    }
+}
+
+// Håndterer hendelser via epoll
+void wait_for_response(int epoll_fd, int unix_socket) {
+    struct epoll_event events[MAX_EVENTS];
+    int num_ready, i;
+
+    // Vent på svar med epoll
+    while (1) {
+        num_ready = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
+        if (num_ready == -1) {
+            perror("epoll_wait");
             exit(EXIT_FAILURE);
         }
-         strcpy(packet->message, message);
-         packet->message[message_len]= '\0';
-        return 1;
+
+        for (i = 0; i < num_ready; i++) {
+            if (events[i].data.fd == unix_socket) {
+                // Motta svaret fra MIP daemon
+                handle_response(unix_socket);
+                return;  // Avslutt etter å ha mottatt svar
+            }
+        }
     }
-  
-    packet->message=calloc(total_message_alloc_size +1, sizeof(char));
-    if (packet->message==NULL){
-        perror("sdu padding malloc failed");
-        exit(EXIT_FAILURE);
-    }
-    message[message_len ] = '\0';
-    strcpy(packet->message, message);
-    //adding nulltrerminator to string 
- 
-    printf("message length : %d", message_len);
-    return total_message_alloc_size;
 }
 
-
-
-int main(int argc, char *argv[]){
-
-    /*reading command line arguments, if len is 3 then -h option is not present */
-    char *unix_socket_path ;
-    uint8_t dst_mip_addr;
-    uint8_t arg;
-    char *h_option ;
-    struct mip_client_payload *packet = malloc(sizeof(struct mip_client_payload));
-    size_t total_message_length_inc_padding ;
-    if(packet==NULL){
-        perror("could not malloc packet ");
+int main(int argc, char *argv[]) {
+    if (argc != 4 || strcmp(argv[1], "-h") == 0) {
+        printf("Usage: %s <socket_path> <dst_mip_addr> <message>\n", argv[0]);
         exit(EXIT_FAILURE);
     }
-    if (argc < 3) {
-    fprintf(stderr, "Usage: %s [-d] <socketPath> <self_mip_addr>\n", argv[0]);
-    exit(EXIT_FAILURE);
-}
-    if (argc == 4){
-        unix_socket_path = argv[1];
-        packet->dst_mip_addr = (uint8_t)atoi(argv[2]);
-        total_message_length_inc_padding = fill_sdu(packet, argv[3]);
-    
-    }
-    //h option flag is passed
-    else{
-        h_option = argv[1];
-        unix_socket_path = argv[2];
-        packet->dst_mip_addr = (uint8_t)atoi(argv[3]);
-        total_message_length_inc_padding= fill_sdu(packet, argv[4]);
-        
-    }
-    printf(" total message len : %d \n" , total_message_length_inc_padding);
-    struct sockaddr_un *address= malloc(sizeof(struct sockaddr_un));
-    if (address==NULL){
-        perror("could not malloc address in client");
+
+    char *socket_path = argv[1];
+    uint8_t dst_mip_addr = (uint8_t)atoi(argv[2]);
+    char *message = argv[3];
+
+    struct sockaddr_un address;
+
+    // Setup Unix-socket for å sende og motta meldinger
+    int unix_socket = setupUnixSocket(socket_path, &address);
+    unixSocket_connect(unix_socket, socket_path, &address);
+
+    // Send ping-melding til MIP daemon
+    send_ping_message(unix_socket, dst_mip_addr, message);
+
+    // Set up epoll for å vente på svar
+    int epoll_fd = epoll_create1(0);
+    if (epoll_fd == -1) {
+        perror("epoll_create1");
         exit(EXIT_FAILURE);
     }
-    //testing that unix socket is porperly set up
-    int unix_data_socket = setupUnixSocket(unix_socket_path, address);
-    size_t packet_size = sizeof(uint8_t)+ total_message_length_inc_padding;
 
-    unixSocket_connect(unix_data_socket, unix_socket_path, address);
-    unixSocket_send(unix_data_socket, packet, packet_size );
-    //printf("message %s sendt \n", packet->message);
-    printf("dst address : %u ", packet->dst_mip_addr);
-    printf("packet length : %d bytes", packet_size);
-    close(unix_data_socket);
-    
-    free(address);
-    free(packet->message);
-    free(packet);
+    struct epoll_event event;
+    event.events = EPOLLIN;  // Vi venter på innkommende data
+    event.data.fd = unix_socket;
 
-    exit(0);
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, unix_socket, &event) == -1) {
+        perror("epoll_ctl");
+        close(unix_socket);
+        exit(EXIT_FAILURE);
+    }
 
+    // Vent på svar fra MIP daemon
+    wait_for_response(epoll_fd, unix_socket);
+
+    // Lukk socket etter å ha mottatt svar
+    close(unix_socket);
+    unlink(socket_path);
+    return 0;
 }

@@ -90,8 +90,7 @@ int unixSocket_connect(int unix_sockfd, char *pathToSocket, struct sockaddr_un *
         exit(EXIT_FAILURE);
     };
     return status;
-}   
-int unixSocket_send(int unix_data_socket, struct mip_client_payload *payload,size_t message_len_bytes) {
+}   int unixSocket_send(int unix_data_socket, struct mip_client_payload *payload,size_t message_len_bytes) {
     size_t message_len_byte = strlen(payload->message); // Få lengden på meldingen
     char *packet_buffer = malloc(message_len_bytes + sizeof(uint8_t) + 1); // +1 for null terminator
 

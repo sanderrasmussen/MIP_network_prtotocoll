@@ -242,7 +242,8 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
     size_t buffer_size = sizeof(uint8_t) + message_len + 1;     // +1 for null-terminator
 
     // Alloker dynamisk buffer for å holde dst_mip_addr og meldingen
-    char *buffer_to_server = malloc(buffer_size);
+    struct mip_client_payload *buffer_to_server = calloc(1, buffer_size);
+
     if (buffer_to_server == NULL) {
         perror("malloc for buffer_to_server failed");
         return -1;
@@ -252,10 +253,10 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
     uint8_t src_addr = mip_pdu->mip_header.src_addr;
 
     // Kopier src_addr til bufferet
-    memcpy(buffer_to_server, &src_addr, sizeof(uint8_t));
+    buffer_to_server->dst_mip_addr= &src_addr;
 
     // Kopier meldingen etter src_addr
-    memcpy(buffer_to_server + sizeof(uint8_t), mip_pdu->sdu.message_payload, message_len + 1);  // Inkluder null-terminator
+    buffer_to_server->message=  mip_pdu->sdu.message_payload;  // Inkluder null-terminator
 
     // Send melding til server via Unix-socket
     int status = unixSocket_send(unix_socket, buffer_to_server, buffer_size);
@@ -321,7 +322,7 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
         send_raw_packet(raw_socket, pdu, cache_entry->mac_address, cache_entry->if_addr);
     }
     printf(" \n ================================= \n");
-    close(sock_accept);
+    
     return 1;
 }
 
@@ -330,6 +331,7 @@ void handle_events(int unix_socket, struct ifs_data *ifs, struct cache *cache, u
     int status, readyIOs;
     struct epoll_event event, events[10]; // 10 er maks antall hendelser
     int epoll_fd = epoll_create1(0);
+    int sock_accept;
     if (epoll_fd == -1) {
         perror("epoll_create1");
         exit(EXIT_FAILURE);

@@ -10,6 +10,7 @@
         "ethernet.h": "c",
         "mipd.h": "c",
         "string_view": "c",
-        "epoll.h": "c"
+        "epoll.h": "c",
+        "cstdint": "c"
     }
 }

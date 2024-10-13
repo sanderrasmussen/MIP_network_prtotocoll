@@ -93,14 +93,14 @@ def init_he1(self, line):
                           title="Client [A]",
                           geometry="80x20+0+300",
                           cmd="./ping_client usockA 20 \"Hello IN3230A\""))
-    time.sleep(1)
+    time.sleep(3)
 
     terms.append(openTerm(self,
                           node=C,
                           title="Client [C]",
                           geometry="80x20+0+600",
                           cmd="./ping_client usockC 20 \"Hello IN4230C\""))
-    time.sleep(1)
+    time.sleep(3)
 
     # This MUST output 'ping timeout' since A is not able to reach C.
     terms.append(openTerm(self,
@@ -108,7 +108,7 @@ def init_he1(self, line):
                           title="Client [A]",
                           geometry="80x20+0+300",
                           cmd="./ping_client usockA 30 \"Hello IN4230A\""))
-    time.sleep(1)
+    time.sleep(3)
 
     # This time the RTT should be smaller since MIP-ARP cache is being used.
     terms.append(openTerm(self,
@@ -116,7 +116,7 @@ def init_he1(self, line):
                           title="Client [A]",
                           geometry="80x20+0+300",
                           cmd="./ping_client usockA 20 \"Hello again IN4230A\""))
-    time.sleep(1)
+    time.sleep(3)
 
 
 # Mininet Callbacks
