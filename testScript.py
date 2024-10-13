@@ -76,22 +76,15 @@ def init_he1(self, line):
                           cmd="./mipd -d usockC 30"))
 
     # Don't launch applications right away
-    time.sleep(3)
+    time.sleep(2)
 
 
     # Run ping_clients on Hosts A and C
     terms.append(openTerm(self,
-                          node=A,
+                          node=C,
                           title="Client [C]",
                           geometry="80x20+0+300",
-                          cmd="./ping_client usockB 10 \"Hello IN3230n\""))
-    time.sleep(3)
-    terms.append(openTerm(self,
-                        node=A,
-                        title="Client [A]",
-                        geometry="80x20+0+300",
-                        cmd="./ping_client usockB 30 \"Hello IN3230n\""))
-
+                          cmd="./ping_client usockC 20 \"Hello IN3230n\""))
 
 
 

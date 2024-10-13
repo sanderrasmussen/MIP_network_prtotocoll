@@ -196,9 +196,10 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
             uint8_t requested_address = mip_pdu->sdu.arp_msg_payload->address;
             if (requested_address == self_mip_addr) {
                 printf(" the arp wants our address \n ");
-                send_arp_response(raw_socket, mip_pdu, 164, src_mac_addr, self_mip_addr, ifs);
+                
+                send_arp_response(raw_socket, mip_pdu, 164, src_mac_addr, self_mip_addr, socket_name);
                 // Legg til senderen i cachen
-                add_to_cache(cache, mip_pdu->mip_header.src_addr, src_mac_addr);
+                add_to_cache(cache, mip_pdu->mip_header.src_addr, src_mac_addr, socket_name);
                 printf(" added entry to cache \n");
             } else {
                 printf("not our address \n");
@@ -208,7 +209,7 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
         if (mip_pdu->sdu.arp_msg_payload->type == RESPONSE) {
             printf("received ARP RESPONSE from :");
             print_mac_addr(src_mac_addr, 6);
-            add_to_cache(cache, mip_pdu->mip_header.src_addr, src_mac_addr);
+            add_to_cache(cache, mip_pdu->mip_header.src_addr, src_mac_addr, socket_name);
             printf("added entry to cache \n");
 
             struct mip_pdu *unsent_pdu = fetch_queued_pdu_in_cache(cache, mip_pdu->mip_header.src_addr);
@@ -216,7 +217,7 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
                 printf("could not fetch unsent pdu \n ");
                 return -1;
             }
-            send_raw_packet(raw_socket, unsent_pdu, src_mac_addr, ifs);
+            send_raw_packet(raw_socket, unsent_pdu, src_mac_addr, socket);
             printf(" unsent pdu that was on hold is now sent \n");
         }
     } else {
@@ -226,7 +227,6 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
     close(raw_socket);
     return 1;
 }
-
 int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, uint8_t self_mip_addr, struct ifs_data *ifs) {
     /* Håndterer eksisterende klient som sender pakker */
     struct mip_client_payload *buffer = malloc(sizeof(struct mip_client_payload));
@@ -251,14 +251,23 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
 
     struct entry *cache_entry = get_mac_from_cache(cache, buffer->dst_mip_addr);
     if (cache_entry == NULL) {
-        printf("mip address not found in cache, sending arp request \n ");
+        // ARP BROADCAST
+        printf("MIP address not found in cache, sending ARP request \n");
         struct mip_pdu *pdu = create_mip_pdu(MIP_ARP, REQUEST, buffer->dst_mip_addr, buffer->message, self_mip_addr);
         uint8_t broadcast_addr[] = BROADCAST_ADDRESS;
-        send_raw_packet(raw_socket, pdu, broadcast_addr, ifs);
+
+        // Send ARP over all interfaces
+        for (int i = 0; i < ifs->ifn; i++) {
+            printf("Sending ARP request on interface %d\n", i);
+            send_raw_packet(ifs->rsock[i], pdu, broadcast_addr, &ifs->addr[i]);  // Bruk den aktuelle socketen og sockaddr_ll
+        }
+
+        // Legg PDU i kø i påvente av ARP-svar
         add_pdu_to_queue(cache, buffer->dst_mip_addr, pdu);
-        printf("pdu is added in waiting queue, will be sent when response is received \n");
+        printf("PDU is added in waiting queue, will be sent when response is received\n");
+
     } else {
-        printf(" MIP address found in cache, sending message \n");
+        printf("MIP address found in cache, sending message\n");
         struct mip_pdu *pdu = create_mip_pdu(PING, REQUEST, buffer->dst_mip_addr, buffer->message, self_mip_addr);
         send_raw_packet(raw_socket, pdu, cache_entry->mac_address, ifs);
     }
@@ -266,6 +275,7 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
     close(sock_accept);
     return 1;
 }
+
 
 void handle_events(int unix_socket, struct ifs_data *ifs, struct cache *cache, uint8_t self_mip_addr) {
     int status, readyIOs;

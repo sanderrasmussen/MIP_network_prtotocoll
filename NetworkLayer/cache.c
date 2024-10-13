@@ -31,7 +31,7 @@ struct entry* get_mac_from_cache(struct cache *cache, uint8_t mip_address){
     return NULL;
 }
 // to be implemented
-int add_to_cache(struct cache *cache, uint8_t mip_address, uint8_t *mac_address ){
+int add_to_cache(struct cache *cache, uint8_t mip_address, uint8_t *mac_address, struct sockaddr_ll *if_addr ){
     struct entry *newEntry= malloc(sizeof(struct entry));
     if (newEntry==NULL){
         perror("Allocate cache entry memory in add to cache function");
@@ -39,6 +39,7 @@ int add_to_cache(struct cache *cache, uint8_t mip_address, uint8_t *mac_address 
     }
     newEntry->mip_address= mip_address;
     memcpy(newEntry->mac_address, mac_address, sizeof(newEntry->mac_address));
+    newEntry->if_addr=  if_addr;
 
     if (cache->head==NULL){
         cache->head = newEntry;

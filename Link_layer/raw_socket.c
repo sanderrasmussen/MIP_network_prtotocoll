@@ -182,58 +182,53 @@ struct mip_pdu * recv_pdu_from_raw(int rawSocket, uint8_t *src_mac_addre){ // th
     return pdu;
 }
 
-
-int send_raw_packet(int raw_socket, struct mip_pdu *mip_pdu, uint8_t *dst_mac_address, struct ifs_data *ifs){
-
+int send_raw_packet(int raw_socket, struct mip_pdu *mip_pdu, uint8_t *dst_mac_address, struct sockaddr_ll *addr) {
     struct ether_frame ethernet_header;
     struct msghdr *message_header;
     struct iovec ioVector[2];
     int status;
-    //serialize pdu
-    char *serilzd_pdu = malloc((sizeof(uint32_t)*2) + 100); //temp hardcode
-    serialize_pdu(mip_pdu,serilzd_pdu );
 
-    //test to see if deserialize wqorks
-    struct mip_pdu *test= deserialize_pdu(serilzd_pdu,(sizeof(uint32_t)*2) + 100);   
-   // printf("deserialized : %s ", test->sdu.message_payload);
+    // Serialiser PDU-en
+    char *serilzd_pdu = malloc((sizeof(uint32_t) * 2) + 100); // Temp hardkodet buffer
+    serialize_pdu(mip_pdu, serilzd_pdu);
 
-    uint8_t dst_mac_addres[]= BROADCAST_ADDRESS;
-    //filling the ethernet header
-    memcpy(ethernet_header.dst_addr, dst_mac_addres, 6);
-    memcpy(ethernet_header.src_addr, ifs->addr[0].sll_addr, 6);
-        // Korrekt tilordning av protokollverdi
-    ethernet_header.eth_proto[0] = (ETH_P_MIP >> 8) & 0xFF; // Høybyte
-    ethernet_header.eth_proto[1] = ETH_P_MIP & 0xFF;        // Lavbyte
+    // Fyll ut Ethernet-overskriften
+    memcpy(ethernet_header.dst_addr, dst_mac_address, 6);  // Bruk kringkastingsadressen
+    memcpy(ethernet_header.src_addr, addr->sll_addr, 6);   // Bruk riktig kilde-MAC-adresse fra ifs_data
 
+    // Tilordning av riktig protokollverdi for MIP (ETH_P_MIP)
+    ethernet_header.eth_proto[0] = (ETH_P_MIP >> 8) & 0xFF;  // Høybyte
+    ethernet_header.eth_proto[1] = ETH_P_MIP & 0xFF;         // Lavbyte
+
+    // Klargjør melding
     ioVector[0].iov_base = &ethernet_header;
     ioVector[0].iov_len = sizeof(struct ether_frame);
-    //payload
     ioVector[1].iov_base = serilzd_pdu;
     ioVector[1].iov_len = sizeof(mip_pdu) + ARP_SDU_SIZE + SDU_MESSAGE_MAX_SIZE;
 
-    
     message_header = (struct msghdr *)calloc(1, sizeof(struct msghdr));
-
-    message_header->msg_name = &(ifs->addr[0]);
+    message_header->msg_name = addr;  // Bruk riktig socket-adresse for valgt grensesnitt
     message_header->msg_namelen = sizeof(struct sockaddr_ll);
     message_header->msg_iov = ioVector;
     message_header->msg_iovlen = 2;
-    
-    status = sendmsg(raw_socket, message_header,0);
-    if (status==-1){
-        perror("Problems with send arp message");
+
+    // Send meldingen via riktig socket
+    status = sendmsg(raw_socket, message_header, 0);
+    if (status == -1) {
+        perror("Error sending raw packet");
         free(message_header);
         exit(EXIT_FAILURE);
     }
-    printf(" raw packet sent to : ");
-    print_mac_addr(ethernet_header.dst_addr, 6);
- 
+
+    printf("Raw packet sent to: ");
+    print_mac_addr(ethernet_header.dst_addr, 6);  // Skriver ut MAC-adressen pakken ble sendt til
 
     free(mip_pdu);
     free(message_header);
     return 1;
 }
-int send_arp_response(int rawSocket,  struct mip_pdu *received_pdu, size_t length, uint8_t *dst_mac_addr, uint8_t *self_mip_addr, struct ifs_data *ifs){
+
+int send_arp_response(int rawSocket,  struct mip_pdu *received_pdu, size_t length, uint8_t *dst_mac_addr, uint8_t *self_mip_addr, struct sockaddr_ll *addr){
     /* create mip pdu first of type ARP RESPONSE , the message argument does not matter here*/
     received_pdu->sdu.arp_msg_payload->type= RESPONSE;
     uint8_t sender_mip_addr = received_pdu->mip_header.src_addr;
@@ -244,9 +239,11 @@ int send_arp_response(int rawSocket,  struct mip_pdu *received_pdu, size_t lengt
         return -1;
     }
 
-    printf("sending arp response, packet contents : ");
-    printf(" arp packet addr %d \n", received_pdu->sdu.arp_msg_payload->address);
-    send_raw_packet(rawSocket, received_pdu, dst_mac_addr, ifs);
+    printf("sending arp response to :");
+    print_mac_addr(dst_mac_addr,6);
+    
+    printf("\n arp packet addr %d \n", received_pdu->sdu.arp_msg_payload->address);
+    send_raw_packet(rawSocket, received_pdu, dst_mac_addr, addr);
     printf(" ARP RESPONSE packet sent to  ");
     print_mac_addr(dst_mac_addr, 6);
     printf('\n');
