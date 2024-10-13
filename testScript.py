@@ -86,9 +86,27 @@ def init_he1(self, line):
                           geometry="80x20+0+300",
                           cmd="./ping_client usockC 20 \"Hello IN3230n\""))
 
+    time.sleep(2)
 
 
-# Mininet Callbacks
+    # Run ping_clients on Hosts A and C
+    terms.append(openTerm(self,
+                          node=B,
+                          title="Client [B]",
+                          geometry="80x20+0+300",
+                          cmd="./ping_client usockB 10 \"Hello IN3230n\""))
+    time.sleep(2)
+
+
+    # Run ping_clients on Hosts A and C
+    terms.append(openTerm(self,
+                          node=A,
+                          title="Client [A]",
+                        geometry="80x20+0+300",
+                        cmd="./ping_client usockA 20 \"Hello IN3230n\""))
+
+
+                # Mininet Callbacks
 # Inside mininet console run 'init_he1'
 
 
