@@ -257,14 +257,22 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
 
     // Kopier meldingen etter src_addr
     buffer_to_server->message=  mip_pdu->sdu.message_payload;  // Inkluder null-terminator
-
-    // Send melding til server via Unix-socket
-    int status = unixSocket_send(unix_socket, buffer_to_server, buffer_size);
-    if (status < 0) {
-        perror("send to server");
-        free(buffer_to_server);  // Frigjør buffer før exit
-        return -1;
+    
+    char *unix_socket_path= "usockB";
+    struct sockaddr_un *address= malloc(sizeof(struct sockaddr_un));
+    if (address==NULL){
+        perror("could not malloc address in client");
+        exit(EXIT_FAILURE);
     }
+    //testing that unix socket is porperly set up
+    int unix_data_socket = setupUnixSocket(unix_socket_path, address);
+
+    unixSocket_connect(unix_data_socket, unix_socket_path, address);
+    int status = unixSocket_send(unix_data_socket, buffer_to_server, buffer_size);
+    //printf("message %s sendt \n", packet->message);
+
+    close(unix_data_socket);
+
 
     printf("\n-----------sending to server app---------------\n");
     printf(" \n ================================= \n");
