@@ -217,7 +217,8 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
                 printf("could not fetch unsent pdu \n ");
                 return -1;
             }
-            send_raw_packet(raw_socket, unsent_pdu, src_mac_addr, socket);
+            printf(" Unsent pdu message : %s \n", unsent_pdu->sdu.message_payload);
+            send_raw_packet(raw_socket, unsent_pdu, src_mac_addr, socket_name);
             printf(" unsent pdu that was on hold is now sent \n");
         }
     } else {
@@ -250,9 +251,10 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
     printf("=== message: %s === \n", buffer->message);
 
     struct entry *cache_entry = get_mac_from_cache(cache, buffer->dst_mip_addr);
-    if (cache_entry == NULL) {
+    if (cache_entry == NULL || cache_entry->mac_address == NULL) {
         // ARP BROADCAST
         printf("MIP address not found in cache, sending ARP request \n");
+        struct mip_pdu *ping_pdu_to_store = create_mip_pdu(PING, NULL, buffer->dst_mip_addr, buffer->message, self_mip_addr);
         struct mip_pdu *pdu = create_mip_pdu(MIP_ARP, REQUEST, buffer->dst_mip_addr, buffer->message, self_mip_addr);
         uint8_t broadcast_addr[] = BROADCAST_ADDRESS;
 
@@ -263,7 +265,8 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
         }
 
         // Legg PDU i kø i påvente av ARP-svar
-        add_pdu_to_queue(cache, buffer->dst_mip_addr, pdu);
+        add_to_cache(cache, buffer->dst_mip_addr, NULL, NULL);
+        add_pdu_to_queue(cache, buffer->dst_mip_addr, ping_pdu_to_store);
         printf("PDU is added in waiting queue, will be sent when response is received\n");
 
     } else {
