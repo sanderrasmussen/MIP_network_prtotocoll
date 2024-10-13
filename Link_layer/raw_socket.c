@@ -246,7 +246,7 @@ int send_arp_response(int rawSocket,  struct mip_pdu *received_pdu, size_t lengt
     send_raw_packet(rawSocket, received_pdu, dst_mac_addr, addr);
     printf(" ARP RESPONSE packet sent to  ");
     print_mac_addr(dst_mac_addr, 6);
-    printf('\n');
+
     return 1;
 }
 
