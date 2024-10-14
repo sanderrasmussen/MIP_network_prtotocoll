@@ -183,7 +183,7 @@ struct mip_pdu* create_mip_pdu( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_
     return NULL;
 
 }
-int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_t self_mip_addr, struct cache *cache, struct ifs_data* ifs, int unix_socket) {
+int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_t self_mip_addr, struct cache *cache, struct ifs_data* ifs, int unix_socket, char * socketPath) {
     uint8_t src_mac_addr[6];
     struct mip_pdu *mip_pdu = recv_pdu_from_raw(raw_socket, src_mac_addr);
 
@@ -258,17 +258,17 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
     // Kopier meldingen etter src_addr
     buffer_to_server->message=  mip_pdu->sdu.message_payload;  // Inkluder null-terminator
     
-    char *unix_socket_path= "usockB";
+  
     struct sockaddr_un *address= malloc(sizeof(struct sockaddr_un));
     if (address==NULL){
         perror("could not malloc address in client");
         exit(EXIT_FAILURE);
     }
     //testing that unix socket is porperly set up
-    int unix_data_socket = setupUnixSocket(unix_socket_path, address);
+    int unix_data_socket = setupUnixSocket(socketPath, address);
 
 
-    unixSocket_connect(unix_data_socket, unix_socket_path, address);
+    unixSocket_connect(unix_data_socket, socketPath, address);
     printf("\n-----------sending to server app---------------\n");
     int status = unixSocket_send(unix_data_socket, buffer_to_server, buffer_size);
     //printf("message %s sendt \n", packet->message);
@@ -276,13 +276,27 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
     char* recv_buff = malloc(200);
     status= read(unix_data_socket,recv_buff, 200);
     printf("RECEIVED PONG FROM SERVER : %s \n",recv_buff+1 );
-    close(unix_data_socket);
+   
+    printf("adfsadfs       \n "); 
+    //now we send the message to the clients mip as PING packet
 
+    uint8_t dst_mip_addr =dst_mip_addr = mip_pdu->mip_header.src_addr;
+    uint8_t dst_mac_addr[6] ;
+    memcpy(dst_mac_addr, src_mac_addr, 6);
+    printf("adfsadfs \n ");
+    struct mip_pdu *pong_pdu =create_mip_pdu(PING,NULL,dst_mip_addr,recv_buff+1, self_mip_addr);
 
+    status = send_raw_packet(raw_socket, pong_pdu, dst_mac_addr,socket_name);
+    if (status <0){
+        perror("send pong message \n");
+        return -1;
+    }
+    printf("    -pong message releayed to dst host \n");
     printf(" \n ================================= \n");
 
     // Frigjør bufferet etter bruk
     free(buffer_to_server);
+     close(unix_data_socket);
 }
 
     return 1;
@@ -339,7 +353,7 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
 }
 
 
-void handle_events(int unix_socket, struct ifs_data *ifs, struct cache *cache, uint8_t self_mip_addr) {
+void handle_events(int unix_socket, struct ifs_data *ifs, struct cache *cache, uint8_t self_mip_addr, char * socketPath) {
     int status, readyIOs;
     struct epoll_event event, events[10]; // 10 er maks antall hendelser
     int epoll_fd = epoll_create1(0);
@@ -376,7 +390,7 @@ void handle_events(int unix_socket, struct ifs_data *ifs, struct cache *cache, u
                 // Håndtere hendelser på raw sockets
                 for (int j = 0; j < ifs->ifn; j++) {
                     if (events[i].data.fd == ifs->rsock[j]) {
-                        serve_raw_connection(ifs->rsock[j], &(ifs->addr[j]), self_mip_addr, cache, ifs, unix_socket );
+                        serve_raw_connection(ifs->rsock[j], &(ifs->addr[j]), self_mip_addr, cache, ifs, unix_socket , socketPath);
                     }
                 }
             }
@@ -440,7 +454,7 @@ int main(int argc, char *argv[]) {
     }
 
     // Håndtere hendelser (både raw sockets og UNIX sockets)
-    handle_events(unix_connection_socket, ifs, cache, self_mip_addr);
+    handle_events(unix_connection_socket, ifs, cache, self_mip_addr, socketPath);
 
     // Rydde opp og lukke sockets
     for (int i = 0; i < ifs->ifn; i++) {

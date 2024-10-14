@@ -27,6 +27,8 @@ void send_ping_message(int unix_socket, uint8_t dst_mip_addr, const char *messag
 
     // Send meldingen til MIP daemon
     unixSocket_send(unix_socket, &payload, strlen(payload.message));
+    printf("Ping message : %s sent \n ", message);
+    printf("sent to : %d \n", dst_mip_addr);
   // Frigjør minne etter bruk
 }
 
@@ -46,7 +48,7 @@ void handle_response(int client_fd) {
     } else if (bytes_read == 0) {
         printf("MIP daemon disconnected\n");
     } else {
-        perror("Error reading from socket");
+        perror("Error reading from socket \n");
     }
 }
 
@@ -66,6 +68,7 @@ void wait_for_response(int epoll_fd, int unix_socket) {
         for (i = 0; i < num_ready; i++) {
             if (events[i].data.fd == unix_socket) {
                 // Motta svaret fra MIP daemon
+                printf("response from MIP deamon \n");
                 handle_response(unix_socket);
                 return;  // Avslutt etter å ha mottatt svar
             }
@@ -78,7 +81,7 @@ int main(int argc, char *argv[]) {
         printf("Usage: %s <socket_path> <dst_mip_addr> <message>\n", argv[0]);
         exit(EXIT_FAILURE);
     }
-
+    printf("Started MIP application \n");
     char *socket_path = argv[1];
     uint8_t dst_mip_addr = (uint8_t)atoi(argv[2]);
     char *message = argv[3];
@@ -91,6 +94,16 @@ int main(int argc, char *argv[]) {
 
     // Send ping-melding til MIP daemon
     send_ping_message(unix_socket, dst_mip_addr, message);
+    //closing the sending socket and creating a listening socket
+    close(unix_socket);
+    int data_sock;
+    int sending_sock = setupUnixSocket(socket_path, &address);
+    unixSocket_bind(sending_sock,socket_path,&address);
+    int status = unixSocket_listen(sending_sock, NULL, data_sock);
+    if (status == -1) {
+        perror("unixSocket_listen failed");
+        exit(EXIT_FAILURE);
+    }
 
     // Set up epoll for å vente på svar
     int epoll_fd = epoll_create1(0);
@@ -101,19 +114,19 @@ int main(int argc, char *argv[]) {
 
     struct epoll_event event;
     event.events = EPOLLIN;  // Vi venter på innkommende data
-    event.data.fd = unix_socket;
+    event.data.fd = sending_sock;
 
-    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, unix_socket, &event) == -1) {
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, sending_sock, &event) == -1) {
         perror("epoll_ctl");
-        close(unix_socket);
+        close(sending_sock);
         exit(EXIT_FAILURE);
     }
 
     // Vent på svar fra MIP daemon
-    wait_for_response(epoll_fd, unix_socket);
+    wait_for_response(epoll_fd, sending_sock);
 
     // Lukk socket etter å ha mottatt svar
-    close(unix_socket);
+    close(sending_sock);
     unlink(socket_path);
     return 0;
 }
