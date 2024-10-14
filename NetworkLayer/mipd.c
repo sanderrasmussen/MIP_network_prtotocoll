@@ -270,7 +270,8 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
     unixSocket_connect(unix_data_socket, unix_socket_path, address);
     int status = unixSocket_send(unix_data_socket, buffer_to_server, buffer_size);
     //printf("message %s sendt \n", packet->message);
-
+    struct mip_client_payload *payload = malloc(100);
+    unixSocket_recieve(unix_data_socket,payload);
     close(unix_data_socket);
 
 
