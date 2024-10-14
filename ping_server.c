@@ -36,7 +36,8 @@ void send_pong_response(int unix_socket, struct mip_client_payload *received_pay
     pong_payload.message = pong_message;
 
     // Send PONG-meldingen tilbake
-    unixSocket_send(unix_socket, &pong_payload, strlen(pong_payload.message));
+    unixSocket_send(unix_socket, &pong_payload, 100);
+    printf("pong response sent \n");
 }
 
 // Håndterer klientmeldinger

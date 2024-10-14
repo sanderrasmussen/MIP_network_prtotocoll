@@ -267,15 +267,18 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
     //testing that unix socket is porperly set up
     int unix_data_socket = setupUnixSocket(unix_socket_path, address);
 
+
     unixSocket_connect(unix_data_socket, unix_socket_path, address);
+    printf("\n-----------sending to server app---------------\n");
     int status = unixSocket_send(unix_data_socket, buffer_to_server, buffer_size);
     //printf("message %s sendt \n", packet->message);
-    struct mip_client_payload *payload = malloc(100);
-    unixSocket_recieve(unix_data_socket,payload);
+    struct mip_client_payload *payload = malloc(200);
+    char* recv_buff = malloc(200);
+    status= read(unix_data_socket,recv_buff, 200);
+    printf("RECEIVED PONG FROM SERVER : %s \n",recv_buff+1 );
     close(unix_data_socket);
 
 
-    printf("\n-----------sending to server app---------------\n");
     printf(" \n ================================= \n");
 
     // Frigjør bufferet etter bruk
