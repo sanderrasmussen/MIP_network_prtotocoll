@@ -249,12 +249,16 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
         //testing that unix socket is porperly set up
             char* recv_sock_path = malloc(12); //usockAclient
             memcpy(recv_sock_path, socketPath, 6);
-            memcpy(recv_sock_path+6, "client",6);
+            memcpy(recv_sock_path+6, "client\0",7);
+            printf("SOCKET PATH %s", recv_sock_path);
         int unix_data_socket = setupUnixSocket(recv_sock_path, address);
 
         unixSocket_connect(unix_data_socket, recv_sock_path, address);
         printf("\n-----------sending to client app---------------\n");
         int status = write(unix_data_socket, mip_pdu->sdu.message_payload, 100);
+        if(status<0){
+            perror("write pong to client");
+        }
         //printf("message %s sendt \n", packet->message);
         struct mip_client_payload *payload = malloc(200);
         char* recv_buff = malloc(200);

@@ -70,7 +70,7 @@ int main(int argc, char *argv[]) {
     if (accept_sock == -1) {
         perror("accept failed");
         close(recv_sock);
-        unlink(socket_path);
+        unlink(recv_sock_path);
         exit(EXIT_FAILURE);
     }
 
@@ -84,6 +84,7 @@ int main(int argc, char *argv[]) {
     // Lukk socket etter å ha mottatt svaret
     close(accept_sock);
     close(recv_sock);
+    unlink(recv_sock_path);
   
     return 0;
 }
