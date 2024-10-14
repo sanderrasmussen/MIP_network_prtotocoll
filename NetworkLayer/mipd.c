@@ -247,10 +247,12 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
             exit(EXIT_FAILURE);
         }
         //testing that unix socket is porperly set up
-        int unix_data_socket = setupUnixSocket(socketPath, address);
+            char* recv_sock_path = malloc(12); //usockAclient
+            memcpy(recv_sock_path, socketPath, 6);
+            memcpy(recv_sock_path+6, "client",6);
+        int unix_data_socket = setupUnixSocket(recv_sock_path, address);
 
-
-        unixSocket_connect(unix_data_socket, socketPath, address);
+        unixSocket_connect(unix_data_socket, recv_sock_path, address);
         printf("\n-----------sending to client app---------------\n");
         int status = write(unix_data_socket, mip_pdu->sdu.message_payload, 100);
         //printf("message %s sendt \n", packet->message);
@@ -258,11 +260,11 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
         char* recv_buff = malloc(200);
         status= read(unix_data_socket,recv_buff, 200);
         printf("RECEIVED ACK FROM CLIENT APP : %s \n",recv_buff+1 );
-
+        printf(" \n ================================= \n");
         close(unix_data_socket);
         return 1;  // Returner tidlig for å unngå uendelig løkke
     }
-    else{
+    else{//if message is PING
         // Beregn korrekt størrelse på bufferet basert på størrelsen på meldingen
         size_t message_len = strlen(mip_pdu->sdu.message_payload);  // Finn lengden på meldingen
         size_t buffer_size = sizeof(uint8_t) + message_len + 1;     // +1 for null-terminator

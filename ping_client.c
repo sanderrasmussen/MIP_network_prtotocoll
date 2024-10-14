@@ -33,7 +33,8 @@ void send_ping_message(int unix_socket, uint8_t dst_mip_addr, const char *messag
 }
 
 
-
+/* Sadly i am unable to use the same socket as received in argument when receiving pong. The mipd is already listening on it and i have implemented
+it in a way where it does not serve only one client at a time, but using FIFO scheduling. Therefore i must make a new socket path: 3.g. usockAclient for receving pongs from mipd*/
 int main(int argc, char *argv[]) {
     if (argc != 4 || strcmp(argv[1], "-h") == 0) {
         printf("Usage: %s <socket_path> <dst_mip_addr> <message>\n", argv[0]);
@@ -56,9 +57,13 @@ int main(int argc, char *argv[]) {
     //closing the sending socket and creating a listening socket
     char *pong[200];
     //create new recv socket :
-    int recv_sock = setupUnixSocket(socket_path, &address);
-    unixSocket_bind(recv_sock, socket_path, &address);
-    unixSocket_listen(recv_sock, socket_path, 5);  // Backlog settes til 5
+    char* recv_sock_path = malloc(12); //usockAclient
+    memcpy(recv_sock_path, socket_path, 6);
+    memcpy(recv_sock_path+6, "client",6);
+    struct sockaddr_un recv_addr;
+    int recv_sock = setupUnixSocket(recv_sock_path, &recv_addr);
+    unixSocket_bind(recv_sock, recv_sock_path, &recv_addr);
+    unixSocket_listen(recv_sock, recv_sock_path, 5);  // Backlog settes til 5
 
     // Vent på tilkobling fra MIP daemon
     int accept_sock = accept(recv_sock, NULL, NULL);
@@ -79,6 +84,6 @@ int main(int argc, char *argv[]) {
     // Lukk socket etter å ha mottatt svaret
     close(accept_sock);
     close(recv_sock);
-    unlink(socket_path);  // Fjern socket-filen
+  
     return 0;
 }
