@@ -237,66 +237,91 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
     printf("    -Received message from %d  \n", mip_pdu->mip_header.src_addr);
     printf("    -message : %s \n", mip_pdu->sdu.message_payload);
 
-    // Beregn korrekt størrelse på bufferet basert på størrelsen på meldingen
-    size_t message_len = strlen(mip_pdu->sdu.message_payload);  // Finn lengden på meldingen
-    size_t buffer_size = sizeof(uint8_t) + message_len + 1;     // +1 for null-terminator
 
-    // Alloker dynamisk buffer for å holde dst_mip_addr og meldingen
-    struct mip_client_payload *buffer_to_server = calloc(1, buffer_size);
+    // IF THE PING MESSAGE IS PONG
+    if (strncmp(mip_pdu->sdu.message_payload, "PONG:", 5) == 0) {
+        printf("Received PONG message, forwarding it to client app. \n");
+        struct sockaddr_un *address= malloc(sizeof(struct sockaddr_un));
+        if (address==NULL){
+            perror("could not malloc address in client");
+            exit(EXIT_FAILURE);
+        }
+        //testing that unix socket is porperly set up
+        int unix_data_socket = setupUnixSocket(socketPath, address);
 
-    if (buffer_to_server == NULL) {
-        perror("malloc for buffer_to_server failed");
-        return -1;
+
+        unixSocket_connect(unix_data_socket, socketPath, address);
+        printf("\n-----------sending to client app---------------\n");
+        int status = write(unix_data_socket, mip_pdu->sdu.message_payload, 100);
+        //printf("message %s sendt \n", packet->message);
+        struct mip_client_payload *payload = malloc(200);
+        char* recv_buff = malloc(200);
+        status= read(unix_data_socket,recv_buff, 200);
+        printf("RECEIVED ACK FROM CLIENT APP : %s \n",recv_buff+1 );
+
+        close(unix_data_socket);
+        return 1;  // Returner tidlig for å unngå uendelig løkke
     }
+    else{
+        // Beregn korrekt størrelse på bufferet basert på størrelsen på meldingen
+        size_t message_len = strlen(mip_pdu->sdu.message_payload);  // Finn lengden på meldingen
+        size_t buffer_size = sizeof(uint8_t) + message_len + 1;     // +1 for null-terminator
 
-    // Kopier src_addr til en midlertidig variabel
-    uint8_t src_addr = mip_pdu->mip_header.src_addr;
+        // Alloker dynamisk buffer for å holde dst_mip_addr og meldingen
+        struct mip_client_payload *buffer_to_server = calloc(1, buffer_size);
 
-    // Kopier src_addr til bufferet
-    buffer_to_server->dst_mip_addr= &src_addr;
+        if (buffer_to_server == NULL) {
+            perror("malloc for buffer_to_server failed");
+            
+            return -1;
+        }
 
-    // Kopier meldingen etter src_addr
-    buffer_to_server->message=  mip_pdu->sdu.message_payload;  // Inkluder null-terminator
+        // Kopier src_addr til en midlertidig variabel
+        uint8_t src_addr = mip_pdu->mip_header.src_addr;
+
+        // Kopier src_addr til bufferet
+        buffer_to_server->dst_mip_addr= &src_addr;
+
+        // Kopier meldingen etter src_addr
+        buffer_to_server->message=  mip_pdu->sdu.message_payload;  // Inkluder null-terminator
+        
     
-  
-    struct sockaddr_un *address= malloc(sizeof(struct sockaddr_un));
-    if (address==NULL){
-        perror("could not malloc address in client");
-        exit(EXIT_FAILURE);
+        struct sockaddr_un *address= malloc(sizeof(struct sockaddr_un));
+        if (address==NULL){
+            perror("could not malloc address in client");
+            exit(EXIT_FAILURE);
+        }
+        //testing that unix socket is porperly set up
+        int unix_data_socket = setupUnixSocket(socketPath, address);
+
+
+        unixSocket_connect(unix_data_socket, socketPath, address);
+        printf("\n-----------sending to server app---------------\n");
+        int status = unixSocket_send(unix_data_socket, buffer_to_server, buffer_size);
+        //printf("message %s sendt \n", packet->message);
+        struct mip_client_payload *payload = malloc(200);
+        char* recv_buff = malloc(200);
+        status= read(unix_data_socket,recv_buff, 200);
+        printf("RECEIVED PONG FROM SERVER : %s \n",recv_buff+1 );
+
+        uint8_t dst_mip_addr = mip_pdu->mip_header.src_addr;
+        uint8_t dst_mac_addr[6] ;
+        memcpy(dst_mac_addr, src_mac_addr, 6);
+        printf("adfsadfs \n ");
+        struct mip_pdu *pong_pdu =create_mip_pdu(PING,NULL,dst_mip_addr,recv_buff+1, self_mip_addr);
+
+        status = send_raw_packet(raw_socket, pong_pdu, dst_mac_addr,socket_name);
+        if (status <0){
+            perror("send pong message \n");
+            return -1;
+        }
+        printf("    -pong message releayed to dst host \n");
+        printf(" \n ================================= \n");
+
+        // Frigjør bufferet etter bruk
+        free(buffer_to_server);
+        close(unix_data_socket);
     }
-    //testing that unix socket is porperly set up
-    int unix_data_socket = setupUnixSocket(socketPath, address);
-
-
-    unixSocket_connect(unix_data_socket, socketPath, address);
-    printf("\n-----------sending to server app---------------\n");
-    int status = unixSocket_send(unix_data_socket, buffer_to_server, buffer_size);
-    //printf("message %s sendt \n", packet->message);
-    struct mip_client_payload *payload = malloc(200);
-    char* recv_buff = malloc(200);
-    status= read(unix_data_socket,recv_buff, 200);
-    printf("RECEIVED PONG FROM SERVER : %s \n",recv_buff+1 );
-   
-    printf("adfsadfs       \n "); 
-    //now we send the message to the clients mip as PING packet
-
-    uint8_t dst_mip_addr =dst_mip_addr = mip_pdu->mip_header.src_addr;
-    uint8_t dst_mac_addr[6] ;
-    memcpy(dst_mac_addr, src_mac_addr, 6);
-    printf("adfsadfs \n ");
-    struct mip_pdu *pong_pdu =create_mip_pdu(PING,NULL,dst_mip_addr,recv_buff+1, self_mip_addr);
-
-    status = send_raw_packet(raw_socket, pong_pdu, dst_mac_addr,socket_name);
-    if (status <0){
-        perror("send pong message \n");
-        return -1;
-    }
-    printf("    -pong message releayed to dst host \n");
-    printf(" \n ================================= \n");
-
-    // Frigjør bufferet etter bruk
-    free(buffer_to_server);
-     close(unix_data_socket);
 }
 
     return 1;
