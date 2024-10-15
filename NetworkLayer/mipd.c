@@ -247,17 +247,24 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
             exit(EXIT_FAILURE);
         }
         //testing that unix socket is porperly set up
-            char* recv_sock_path = malloc(12); //usockAclient
-            memcpy(recv_sock_path, socketPath, 6);
-            memcpy(recv_sock_path+6, "client\0",7);
-            printf("SOCKET PATH %s", recv_sock_path);
+        char* recv_sock_path = malloc(12); //usockAclient
+        memcpy(recv_sock_path, socketPath, 6);
+        memcpy(recv_sock_path+6, "client\0",7);
+        printf("SOCKET PATH %s", recv_sock_path);
         int unix_data_socket = setupUnixSocket(recv_sock_path, address);
 
-        unixSocket_connect(unix_data_socket, recv_sock_path, address);
+        int status = unixSocket_connect(unix_data_socket, recv_sock_path, address);
+        if(status==-1){
+            printf("Could not connect to client application unix socket. In MIP, PDUs are delivered in a best effort, unreliable manner \n");
+            printf("The problem could be due to no client bound to unix socket at the time of transfer.\n");       
+            return 1;
+        }
         printf("\n-----------sending to client app---------------\n");
-        int status = write(unix_data_socket, mip_pdu->sdu.message_payload, 100);
+        status = write(unix_data_socket, mip_pdu->sdu.message_payload, 100);
         if(status<0){
-            perror("write pong to client");
+            printf("Could not send to client application. In MIP, PDUs are delivered in a best effort, unreliable manner \n");
+            printf("The problem could be due to no client bound to unix socket at the time of transfer.\n");       
+            return 1;
         }
         //printf("message %s sendt \n", packet->message);
         struct mip_client_payload *payload = malloc(200);

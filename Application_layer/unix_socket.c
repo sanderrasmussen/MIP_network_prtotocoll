@@ -86,8 +86,6 @@ int unixSocket_connect(int unix_sockfd, char *pathToSocket, struct sockaddr_un *
     if(status== -1){
         perror( "Error: could not connect socket ");
         close(unix_sockfd);
-  
-        exit(EXIT_FAILURE);
     };
     return status;
 }   int unixSocket_send(int unix_data_socket, struct mip_client_payload *payload,size_t message_len_bytes) {
@@ -96,7 +94,6 @@ int unixSocket_connect(int unix_sockfd, char *pathToSocket, struct sockaddr_un *
 
     if (packet_buffer == NULL) {
         perror("Error: malloc failed");
-        exit(EXIT_FAILURE);
     }
 
     memcpy(packet_buffer, &(payload->dst_mip_addr), sizeof(uint8_t)); // Kopier dst_mip_addr
