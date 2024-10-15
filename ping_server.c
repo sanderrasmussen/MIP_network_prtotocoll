@@ -95,12 +95,13 @@ void handle_events(int epoll_fd, int unix_socket) {
 }
 
 int main(int argc, char *argv[]) {
- 
-    if (argc != 2 || strcmp(argv[1], "-h") == 0) {
-        printf("Usage: %s <socket_lower>\n", argv[0]);
+
+    if (argc != 2 || argc!=3 || strcmp(argv[1], "-h") == 0) {
+        printf("Usage: mipd [-h] [-d] <socket_upper> <MIP address>");
         exit(EXIT_FAILURE);
     }
     printf("server started \n");
+    
     // Argument: stien til Unix-socket
     char *socket_path = argv[1];
     struct sockaddr_un address;
