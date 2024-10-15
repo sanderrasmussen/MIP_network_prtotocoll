@@ -28,6 +28,7 @@
 void send_pong_response(int unix_socket, struct mip_client_payload *received_payload) {
     // Lag "PONG:<message>"
     char pong_message[256];  // Buffer for PONG-meldingen
+    
     snprintf(pong_message, sizeof(pong_message), "PONG:%s", received_payload->message);
 
     // Lag ny payload med PONG-meldingen
@@ -95,12 +96,13 @@ void handle_events(int epoll_fd, int unix_socket) {
 }
 
 int main(int argc, char *argv[]) {
- 
+
     if (argc != 2 || strcmp(argv[1], "-h") == 0) {
-        printf("Usage: %s <socket_lower>\n", argv[0]);
+        printf("Usage: mipd [-h] [-d] <socket_upper> <MIP address>");
         exit(EXIT_FAILURE);
     }
     printf("server started \n");
+    
     // Argument: stien til Unix-socket
     char *socket_path = argv[1];
     struct sockaddr_un address;

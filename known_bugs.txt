@@ -1,0 +1,12 @@
+The are a couple of known bugs. Here are a ranked list of them starting with the most severe ones.
+
+Client receiving pong:
+    due to only one client being able to listen to a socket file path at a time, if a client gets no pong response from mipd, 
+    it will simply hang and block all other pong responses to the clients trying to connect later in the queue.
+    In the test script provided. The thirdd client is trying to connect to a host not directly connected to its own host.
+    It therefore hangs and blocks the fourth client from receiving its pong. 
+    The two first clients both get a pong sicne their destination hosts is connected to their own hosts.
+    This bug only affects the pong receiving of the client applications. It does not affect the mipd or the server application for receiving pings.
+
+Memory management:
+    Buffer overflows and memory leaks might happen.
