@@ -20,6 +20,7 @@
 #define MAX_EVENTS	10
 #define MAX_IF		3
 #define MAX_INTERFACES 10
+#define PACKET_MAX_SIZE 100
 
 struct ether_frame {
 	uint8_t dst_addr[6];

@@ -231,7 +231,7 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
             printf(" \n ================================= \n");
         }
     }
-
+ 
     else {
     printf(" \n ================================= \n");
     printf("    -Received message from %d  \n", mip_pdu->mip_header.src_addr);
@@ -268,11 +268,12 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
         }
         //printf("message %s sendt \n", packet->message);
         struct mip_client_payload *payload = malloc(200);
-        char* recv_buff = malloc(200);
-        status= read(unix_data_socket,recv_buff, 200);
-        printf("RECEIVED ACK FROM CLIENT APP : %s \n",recv_buff+1 );
+        char* recv_buff = malloc(5);
+        status= read(unix_data_socket,recv_buff, 5);
+        printf("RECEIVED ACK FROM CLIENT APP : %s \n",recv_buff );
         printf(" \n ================================= \n");
         close(unix_data_socket);
+        free(recv_buff);
         return 1;  // Returner tidlig for å unngå uendelig løkke
     }
     else{//if message is PING
@@ -315,12 +316,12 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
         struct mip_client_payload *payload = malloc(200);
         char* recv_buff = malloc(200);
         status= read(unix_data_socket,recv_buff, 200);
-        printf("RECEIVED PONG FROM SERVER : %s \n",recv_buff+1 );
+        printf("RECEIVED PONG FROM SERVER : %s \n",recv_buff +1);
 
         uint8_t dst_mip_addr = mip_pdu->mip_header.src_addr;
         uint8_t dst_mac_addr[6] ;
         memcpy(dst_mac_addr, src_mac_addr, 6);
-        printf("adfsadfs \n ");
+  
         struct mip_pdu *pong_pdu =create_mip_pdu(PING,NULL,dst_mip_addr,recv_buff+1, self_mip_addr);
 
         status = send_raw_packet(raw_socket, pong_pdu, dst_mac_addr,socket_name);
@@ -333,6 +334,7 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
 
         // Frigjør bufferet etter bruk
         free(buffer_to_server);
+        free(payload);
         close(unix_data_socket);
     }
 }

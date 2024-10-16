@@ -135,8 +135,8 @@ int setupRawSocket(){
 }
 struct mip_pdu * recv_pdu_from_raw(int rawSocket, uint8_t *src_mac_addre){ // the src mac addr is the buffer we store the mac address of the sender in so that we can cache the mip and mac
     int status;
-    size_t pdu_length = sizeof(uint64_t)+ 100; //hardcoded sadly
-    struct mip_pdu *pdu = malloc(sizeof(pdu_length));
+    size_t pdu_length = 100; //hardcoded sadly
+    struct mip_pdu *pdu = malloc(100);
     struct sockaddr_ll socket_name;
     struct ether_frame ethernet_frame_header;
     struct msghdr message;
@@ -189,7 +189,7 @@ int send_raw_packet(int raw_socket, struct mip_pdu *mip_pdu, uint8_t *dst_mac_ad
     int status;
 
     // Serialiser PDU-en
-    char *serilzd_pdu = malloc((sizeof(uint32_t) * 2) + 100); // Temp hardkodet buffer
+    char *serilzd_pdu = malloc(100); // Temp hardkodet buffer
     serialize_pdu(mip_pdu, serilzd_pdu);
 
     // Fyll ut Ethernet-overskriften
@@ -204,7 +204,7 @@ int send_raw_packet(int raw_socket, struct mip_pdu *mip_pdu, uint8_t *dst_mac_ad
     ioVector[0].iov_base = &ethernet_header;
     ioVector[0].iov_len = sizeof(struct ether_frame);
     ioVector[1].iov_base = serilzd_pdu;
-    ioVector[1].iov_len = sizeof(mip_pdu) + ARP_SDU_SIZE + SDU_MESSAGE_MAX_SIZE;
+    ioVector[1].iov_len = 100;
 
     message_header = (struct msghdr *)calloc(1, sizeof(struct msghdr));
     message_header->msg_name = addr;  // Bruk riktig socket-adresse for valgt grensesnitt

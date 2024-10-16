@@ -80,7 +80,7 @@ int main(int argc, char *argv[]) {
     int bytes_read = read(accept_sock, pong, sizeof(pong) - 1);  // -1 for å sikre plass til null-terminator
 
     printf("Pong received: %s\n", pong  );
-    write(accept_sock,"ACK",3);
+    write(accept_sock,"ACK\0",5);
     // Lukk socket etter å ha mottatt svaret
     close(accept_sock);
     close(recv_sock);
