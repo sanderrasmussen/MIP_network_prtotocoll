@@ -25,20 +25,24 @@
 #include "../Link_layer/raw_socket.h"
 #include "cache.h"
 
+/*Notes: this application was developed with the intention of only having one active client and server at a time on each mipd. 
+The intetion is that a client should be started only when there is no active. This has not been implemented here. 
+The testing script launches multiple clients at the same time. Therefore not all of them will receive a PONG ACK every time the program is run.
+However as long as only one server is running per mipd, the server should be able to receive all of the pings and send back pongs regardless of how many clients run at the same time.
+This will in the testingscript only affect the clients getting the PONGs.
 
-//raw mip ethernet communication
+Another note. The buffers are not properly managed yet, hopefully i can fix this within the delivery of home exam 2.
+I tested this on nrec and it should work.*/
 
+//function for serializing pdu to be sent over raw sockets
 size_t serialize_pdu(struct mip_pdu *mip_pdu, char* buffer){
-    //convert mip pdu into a buffer carray
 
     size_t offset = 0;
-
     // Serialize the mip_header
     buffer[offset++] = mip_pdu->mip_header.dest_addr;  // 1 byte for dest_addr
     buffer[offset++] = mip_pdu->mip_header.src_addr;   // 1 byte for src_addr
 
-    //printf("serialised dst address : %d" , mip_pdu->mip_header.dest_addr);
-    //printf("serialised dst address : %d" , buffer[0]  );
+    // Doing micro management of bits
     // Pack ttl (4 bits), sdu_len (9 bits), and sdu_type (3 bits) into 3 bytes
     uint16_t ttl_sdu_len = (mip_pdu->mip_header.ttl << 12) |
                            (mip_pdu->mip_header.sdu_len & 0x1FF);  // Pack ttl and sdu_len
@@ -47,9 +51,9 @@ size_t serialize_pdu(struct mip_pdu *mip_pdu, char* buffer){
     buffer[offset++] = ttl_sdu_len & 0xFF;         // Low byte of ttl_sdu_len
     buffer[offset++] = (mip_pdu->mip_header.sdu_type & 0x07);  // 3 bits for sdu_type
 
-    // Now serialize the sdu (payload)
+    // Now serialize the sdu 
     if (mip_pdu->mip_header.sdu_type == MIP_ARP) {
-        // Serialize ARP message
+        // serialize ARP message
         memcpy(buffer + offset, mip_pdu->sdu.arp_msg_payload, ARP_SDU_SIZE);
         offset += ARP_SDU_SIZE;
     } else if (mip_pdu->mip_header.sdu_type == PING) {
@@ -58,10 +62,9 @@ size_t serialize_pdu(struct mip_pdu *mip_pdu, char* buffer){
         offset += mip_pdu->mip_header.sdu_len;
     }
 
-    //serialize test
-//    / print("serialized message %s ", )
     return offset;  // Return the total number of bytes serialized into the buffer
 }
+//function for deserializing pdu to be sent over raw sockets
 struct mip_pdu* deserialize_pdu(char* buffer, size_t length) {
     struct mip_pdu* mip_pdu = (struct mip_pdu*)malloc(sizeof(struct mip_pdu));
     size_t offset = 0;
@@ -77,7 +80,7 @@ struct mip_pdu* deserialize_pdu(char* buffer, size_t length) {
     mip_pdu->mip_header.sdu_type = buffer[offset + 2] & 0x07;  // 3 bits for sdu_type
     offset += 3;  // Move the offset by 3 bytes (2 for ttl_sdu_len and 1 for sdu_type)
 
-    // Deserialize the sdu (payload)
+    // Deserialize the sdu
     if (mip_pdu->mip_header.sdu_type == MIP_ARP) {
         // Deserialize ARP message
         mip_pdu->sdu.arp_msg_payload = (struct mip_arp_message*)malloc(ARP_SDU_SIZE);
@@ -111,31 +114,22 @@ struct mip_pdu* create_mip_pdu( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_
         }
         header->dest_addr = dst_mip_addr;
         header->src_addr = src_address;
-        header->ttl= 1; //recommended to set to one according to exam text
+        header->ttl= 1; //recommended to set to one according to exam text, not yet decreased when reaching hosts
         header->sdu_type= sdu_type; //can be ping or arp, in this case it is arp
         header->sdu_len = sizeof(uint32_t);
          /*if it is arp, then we know that the sdu len is only 32 bit because the payload is:
-       
                     +-------+-------------------------+-----------------------------+
             | Type  | Address                 | Padding/ Reserved           |
             +-------+-------------------------+-----------------------------+
             | 0x00  | MIP address to look up  | Pad with 0x00 until 32 bits |
             +-------+-------------------------+-----------------------------+
-
         */
-
         //adding the payload 
         struct mip_pdu* mip_pdu = malloc(sizeof(struct mip_header)+ header->sdu_len*sizeof(char));
         mip_pdu->sdu.arp_msg_payload = malloc(sizeof(struct mip_arp_message));
         
         memcpy(&mip_pdu->mip_header, header, sizeof(struct mip_header));
-        /*filling sdu which is pointer to
-            struct mip_arp_message{
-                uint32_t type : 1;
-                uint32_t address : 8;
-                uint32_t padding : 23;
-        }__attribute__((packed));
-        */
+
         //fill mip arp message:
         mip_pdu->sdu.arp_msg_payload->type = arp_type; //request or response
         mip_pdu->sdu.arp_msg_payload->address = dst_mip_addr;//address to look up 
@@ -171,11 +165,6 @@ struct mip_pdu* create_mip_pdu( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_
 
         mip_pdu->sdu.message_payload = malloc(strlen(message)+1);
         memcpy(mip_pdu->sdu.message_payload, message, strlen(message)+1);
-        
-        //printf("pdu test : \n");
-        //printf("dst addr %d ", mip_pdu->mip_header.dest_addr);
-    
-
 
         return mip_pdu; 
     }
@@ -183,10 +172,12 @@ struct mip_pdu* create_mip_pdu( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_
     return NULL;
 
 }
+// The main function for handling incomming raw socket connections. The packet types are checked and handled accordingly.
 int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_t self_mip_addr, struct cache *cache, struct ifs_data* ifs, int unix_socket, char * socketPath) {
     uint8_t src_mac_addr[6];
     struct mip_pdu *mip_pdu = recv_pdu_from_raw(raw_socket, src_mac_addr);
 
+    //  ARP PDU 
     if (mip_pdu->mip_header.sdu_type == MIP_ARP) {
         if (mip_pdu->sdu.arp_msg_payload->type == REQUEST) {
             printf(" \n ================================= \n");
@@ -206,7 +197,7 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
             }
             printf(" \n ================================= \n");
         }
-
+        // RESPONSE PDU
         else if (mip_pdu->sdu.arp_msg_payload->type == RESPONSE) {
             printf(" \n ================================= \n");
             printf("received ARP RESPONSE from :");
@@ -226,8 +217,8 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
                 }
                 send_raw_packet(raw_socket, unsent_pdu, src_mac_addr, socket_name);
                 printf(" Unsent pdu that was on hold is now sent \n");
-                free(unsent_pdu->sdu.message_payload); // Free the message payload
-                free(unsent_pdu);  // Free the PDU itself
+                free(unsent_pdu->sdu.message_payload); 
+                free(unsent_pdu);  
             }
             printf(" \n ================================= \n");
         }
@@ -355,9 +346,9 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
 
     return 1;
 }
-
+// Main function for handling incoming unix domain socket connections
 int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, uint8_t self_mip_addr, struct ifs_data *ifs) {
-    /* Håndterer eksisterende klient som sender pakker */
+
     struct mip_client_payload *buffer = malloc(sizeof(struct mip_client_payload));
     char recv_buffer[1000];
     memset(recv_buffer, 0, sizeof(recv_buffer));
@@ -411,7 +402,7 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
     return 1;
 }
 
-
+// Listeneing on sockets and handling events on them
 void handle_events(int unix_socket, struct ifs_data *ifs, struct cache *cache, uint8_t self_mip_addr, char * socketPath) {
     int status, readyIOs;
     struct epoll_event event, events[10]; // 10 er maks antall hendelser
@@ -422,10 +413,10 @@ void handle_events(int unix_socket, struct ifs_data *ifs, struct cache *cache, u
         exit(EXIT_FAILURE);
     }
 
-    // Legg til unix_socket i epoll
+    // add unix socket to epoll
     add_to_epoll_table(epoll_fd, &event, unix_socket);
 
-    // Legg til alle raw sockets i epoll
+    // add raw socket to epoll
     for (int i = 0; i < ifs->ifn; i++) {
         add_to_epoll_table(epoll_fd, &event, ifs->rsock[i]);
     }
@@ -457,13 +448,13 @@ void handle_events(int unix_socket, struct ifs_data *ifs, struct cache *cache, u
     }
 }
 
-
+// Main funciton, taking in parameters and starting the mip daemon
 int main(int argc, char *argv[]) {
     uint8_t self_mip_addr;
     char *d_flag;
     char *socketPath;
 
-    // Argumentbehandling
+    // handling arguments
     if (argc == 4) {
         d_flag = argv[1];
         socketPath = argv[2];
@@ -476,22 +467,20 @@ int main(int argc, char *argv[]) {
     printf("own mip addr : %d\n", self_mip_addr);
     printf("socket path : %s\n", socketPath);
 
-    // Allokere cache
+    //setting up cache datastructures
     struct cache *cache = malloc(sizeof(struct cache));
     if (cache == NULL) {
         perror("could not malloc cache");
         exit(EXIT_FAILURE);
     }
 
-    // Allokere ifs_data-strukturen for grensesnittene
-    struct ifs_data *ifs = malloc(sizeof(struct ifs_data));
 
+    struct ifs_data *ifs = malloc(sizeof(struct ifs_data));
     if (ifs == NULL) {
         perror("could not malloc ifs_data");
         exit(EXIT_FAILURE);
     }
-
-    // Initialisere ifs_data-strukturen med grensesnittinformasjon og raw sockets
+    // initialize interfaces
     init_ifs(ifs);
 
     // UNIX socket setup
@@ -502,11 +491,9 @@ int main(int argc, char *argv[]) {
         perror("could not malloc address");
         exit(EXIT_FAILURE);
     }
-
-    
    
     int mask = umask(0);
-    unlink(socketPath); // Fjerne eventuell eksisterende socket
+    unlink(socketPath); //remove socket if exists, only one can be bound to a socket
     unix_connection_socket = setupUnixSocket(socketPath, address);
     unix_data_socket = unixSocket_bind(unix_connection_socket, socketPath, address);
     status = unixSocket_listen(unix_connection_socket, NULL, unix_data_socket);
@@ -515,10 +502,10 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
     umask(mask);
-    // Håndtere hendelser (både raw sockets og UNIX sockets)
+
     handle_events(unix_connection_socket, ifs, cache, self_mip_addr, socketPath);
 
-    // Rydde opp og lukke sockets
+    // cleaning and closing up
     for (int i = 0; i < ifs->ifn; i++) {
         close(ifs->rsock[i]);
     }
