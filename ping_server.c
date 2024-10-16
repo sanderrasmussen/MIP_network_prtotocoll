@@ -27,9 +27,9 @@
 // Funksjon for å lage en "PONG:<received message>"
 void send_pong_response(int unix_socket, struct mip_client_payload *received_payload) {
     // Lag "PONG:<message>"
-    char pong_message[256];  // Buffer for PONG-meldingen
+    char pong_message[100];  // Buffer for PONG-meldingen
     
-    snprintf(pong_message, sizeof(pong_message), "PONG:%s", received_payload->message);
+    snprintf(pong_message, sizeof(pong_message)-2, "PONG:%s", received_payload->message);
 
     // Lag ny payload med PONG-meldingen
     struct mip_client_payload pong_payload;
@@ -37,33 +37,32 @@ void send_pong_response(int unix_socket, struct mip_client_payload *received_pay
     pong_payload.message = pong_message;
 
     // Send PONG-meldingen tilbake
-    unixSocket_send(unix_socket, &pong_payload, 100);
-    printf("pong response sent \n");
+    int status = unixSocket_send(unix_socket, &pong_payload, 100);
+    if(status==-1){
+        perror("could not send \n");
+    }
+
 }
 
 // Håndterer klientmeldinger
 void handle_client_message(int client_fd) {
     // Motta klientens melding
     struct mip_client_payload received_payload;
-    char buffer[256];
+    char buffer[100];
     memset(buffer, 0, sizeof(buffer));
 
-    int bytes_read = read(client_fd, buffer, sizeof(buffer));
-    if (bytes_read > 0) {
-        // Ekstraher melding og destinasjons-MIP-adresse
-        received_payload.dst_mip_addr = buffer[0]; // Første byte er dst_mip_addr
-        received_payload.message = buffer + 1;     // Meldingen følger etter dst_mip_addr
+    int bytes_read = read(client_fd, buffer, 100);
 
-        printf("Received message from MIP daemon: %s\n", received_payload.message);
+    // Ekstraher melding og destinasjons-MIP-adresse
+    received_payload.dst_mip_addr = buffer[0]; // Første byte er dst_mip_addr
+    received_payload.message = buffer + 1;     // Meldingen følger etter dst_mip_addr
 
-        // Sende PONG-svar
-        send_pong_response(client_fd, &received_payload);
-    } else if (bytes_read == 0) {
-        printf("Client disconnected\n");
-    } else {
-        perror("Error reading from socket");
-    }
-    close(client_fd);
+    printf("Received message from MIP daemon: %s\n", received_payload.message);
+
+    // Sende PONG-svar
+    send_pong_response(client_fd, &received_payload);
+    printf("pong response sent \n");
+    
 }
 
 // Håndterer hendelser via epoll
@@ -107,10 +106,13 @@ int main(int argc, char *argv[]) {
     char *socket_path = argv[1];
     struct sockaddr_un address;
 
+    int mask = umask(0);
+    unlink(socket_path);
     // Setup Unix-socket
     int unix_socket = setupUnixSocket(socket_path, &address);
     unixSocket_bind(unix_socket, socket_path, &address);
     unixSocket_listen(unix_socket, socket_path, unix_socket);
+    umask(mask);
 
     // Set up epoll
     int epoll_fd = epoll_create1(0);
@@ -131,8 +133,7 @@ int main(int argc, char *argv[]) {
 
     // Håndter innkommende hendelser
     handle_events(epoll_fd, unix_socket);
-
     close(unix_socket);
-    unlink(socket_path);
+
     return 0;
 }

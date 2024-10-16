@@ -219,7 +219,8 @@ int send_raw_packet(int raw_socket, struct mip_pdu *mip_pdu, uint8_t *dst_mac_ad
         free(message_header);
         exit(EXIT_FAILURE);
     }
-
+    free(message_header);  
+    free(serilzd_pdu);  
     printf("Raw packet sent to: ");
     print_mac_addr(ethernet_header.dst_addr, 6);  // Skriver ut MAC-adressen pakken ble sendt til
 

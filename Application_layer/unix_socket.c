@@ -34,7 +34,6 @@ int setupUnixSocket(char *pathToSocket, struct sockaddr_un *address){
     if(unix_sockfd== -1){
         fprintf(stderr, "Error: could not create socket ");
         close(unix_sockfd);
-        unlink(pathToSocket);
         exit(EXIT_FAILURE);
     };
     return unix_sockfd;
@@ -49,13 +48,13 @@ int unixSocket_bind(int unix_sockfd, char *pathToSocket, struct sockaddr_un *add
     strncpy(address->sun_path, pathToSocket, sizeof(address->sun_path)-1);
     /* Using umask to give file permissions*/
     int mask =umask(0);
-    unlink(pathToSocket);
+
     status = bind(unix_sockfd,(struct sockaddr *) address, sizeof(struct sockaddr_un));
     if(status== -1){
         fprintf(stderr, "Error: could not bind socket ");
         close(unix_sockfd);
         umask(mask);
-        unlink(pathToSocket);
+
         exit(EXIT_FAILURE);
     };
     umask(mask);
@@ -68,7 +67,6 @@ int unixSocket_listen(int unix_sockfd, char *pathToSocket, int unix_data_socket)
     if(status== -1){
         fprintf(stderr, "Error: could not listen on socket ");
         close(unix_sockfd);
-        unlink(pathToSocket);
         exit(EXIT_FAILURE);
     };
     return 1;
@@ -89,8 +87,8 @@ int unixSocket_connect(int unix_sockfd, char *pathToSocket, struct sockaddr_un *
     };
     return status;
 }   int unixSocket_send(int unix_data_socket, struct mip_client_payload *payload,size_t message_len_bytes) {
-    size_t message_len_byte = strlen(payload->message); // Få lengden på meldingen
-    char *packet_buffer = malloc(message_len_bytes + sizeof(uint8_t) + 1); // +1 for null terminator
+    size_t message_len_byte = strlen(payload->message); 
+    char *packet_buffer = malloc(message_len_bytes + sizeof(uint8_t) ); 
 
     if (packet_buffer == NULL) {
         perror("Error: malloc failed");
@@ -117,10 +115,6 @@ int unixSocket_recieve(int unix_data_socket, struct mip_client_payload *payload)
         perror("unix socket read");
         exit(EXIT_FAILURE);
     }
-}
-int close_unix_socket(int socket, char *socketname){
-    close(socket);
-    unlink(socketname);
 }
 
 int add_to_epoll_table(int epoll_socket, struct epoll_event *event, int socket){

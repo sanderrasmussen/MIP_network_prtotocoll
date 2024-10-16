@@ -21,15 +21,19 @@
 
 // Funksjon for å sende ping-melding til MIP daemon
 void send_ping_message(int unix_socket, uint8_t dst_mip_addr, const char *message) {
-    struct mip_client_payload payload;
-    payload.dst_mip_addr = dst_mip_addr;
-    payload.message = message;
+    struct mip_client_payload * payload=malloc(100);
+    payload->dst_mip_addr = dst_mip_addr;
+    payload->message = message;
 
     // Send meldingen til MIP daemon
-    unixSocket_send(unix_socket, &payload, strlen(payload.message));
+    int status = unixSocket_send(unix_socket, payload, 100);
+    if(status==-1){
+        perror("send");
+        exit(EXIT_FAILURE);
+    }
     printf("Ping message : %s sent \n ", message);
     printf("sent to : %d \n", dst_mip_addr);
-  // Frigjør minne etter bruk
+    free(payload);
 }
 
 
@@ -43,23 +47,27 @@ int main(int argc, char *argv[]) {
     printf("Started MIP application \n");
     char *socket_path = argv[1];
     uint8_t dst_mip_addr = (uint8_t)atoi(argv[2]);
-    char *message = argv[3];
+    char *message = malloc(99);
+    strcpy(message, argv[3]);
+
 
     struct sockaddr_un address;
 
     // Setup Unix-socket for å sende og motta meldinger
     int unix_socket = setupUnixSocket(socket_path, &address);
-    unixSocket_connect(unix_socket, socket_path, &address);
-
+    int status = unixSocket_connect(unix_socket, socket_path, &address);
+    if (status == -1){
+        perror("connect client");
+    }
     // Send ping-melding til MIP daemon
-    send_ping_message(unix_socket, dst_mip_addr, message);
-    close(unix_socket);
+     send_ping_message(unix_socket, dst_mip_addr, message);
+    
     //closing the sending socket and creating a listening socket
     char *pong[200];
     //create new recv socket :
-    char* recv_sock_path = malloc(12); //usockAclient
+    char* recv_sock_path = malloc(14); //usockAclient
     memcpy(recv_sock_path, socket_path, 6);
-    memcpy(recv_sock_path+6, "client",6);
+    memcpy(recv_sock_path+6, "client\0",8);
     struct sockaddr_un recv_addr;
     int recv_sock = setupUnixSocket(recv_sock_path, &recv_addr);
     unixSocket_bind(recv_sock, recv_sock_path, &recv_addr);

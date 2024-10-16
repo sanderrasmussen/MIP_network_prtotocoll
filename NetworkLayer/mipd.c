@@ -187,7 +187,6 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
     uint8_t src_mac_addr[6];
     struct mip_pdu *mip_pdu = recv_pdu_from_raw(raw_socket, src_mac_addr);
 
-    // Dette er den interessante delen der vi svarer på ARP eller sender meldinger tilbake
     if (mip_pdu->mip_header.sdu_type == MIP_ARP) {
         if (mip_pdu->sdu.arp_msg_payload->type == REQUEST) {
             printf(" \n ================================= \n");
@@ -199,8 +198,7 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
                 printf("    -the arp wants our address \n ");
                 
                 send_arp_response(raw_socket, mip_pdu, 164, src_mac_addr, self_mip_addr, socket_name);
-                // Legg til senderen i cachen
-      
+                // Add the sender to the cache
                 add_to_cache(cache, mip_pdu->mip_header.src_addr, src_mac_addr, socket_name);
                 printf("    -added entry to cache \n");
             } else {
@@ -213,137 +211,151 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
             printf(" \n ================================= \n");
             printf("received ARP RESPONSE from :");
             print_mac_addr(src_mac_addr, 6);
+
+            // Add the sender's MAC to the cache
             add_to_cache(cache, mip_pdu->mip_header.src_addr, src_mac_addr, socket_name);
             printf("added entry to cache \n");
 
-            struct mip_pdu *unsent_pdu = fetch_queued_pdu_in_cache(cache, mip_pdu->mip_header.src_addr);
-            if (unsent_pdu == NULL) {
-                printf("could not fetch unsent pdu \n ");
-                return -1;
+            // Fetch queued PDUs for this MIP address and send them
+            struct mip_pdu *unsent_pdu;
+            while ((unsent_pdu = fetch_queued_pdu_in_cache(cache, mip_pdu->mip_header.src_addr)) != NULL) {
+                printf(" Unsent pdu message: %s \n", unsent_pdu->sdu.message_payload);
+                if (unsent_pdu->mip_header.sdu_type != PING) {
+                    perror("unsent pdu not ping pdu");
+                    return -1;
+                }
+                send_raw_packet(raw_socket, unsent_pdu, src_mac_addr, socket_name);
+                printf(" Unsent pdu that was on hold is now sent \n");
+                free(unsent_pdu->sdu.message_payload); // Free the message payload
+                free(unsent_pdu);  // Free the PDU itself
             }
-            printf(" Unsent pdu message : %s \n", unsent_pdu->sdu.message_payload);
-            if(unsent_pdu->mip_header.sdu_type!=PING){
-                perror("unsent pdu not ping pdu ");
-                return -1;
-            }
-            send_raw_packet(raw_socket, unsent_pdu, src_mac_addr, socket_name);
-            printf(" unsent pdu that was on hold is now sent \n");
             printf(" \n ================================= \n");
         }
-    }
- 
+    } 
     else {
-    printf(" \n ================================= \n");
-    printf("    -Received message from %d  \n", mip_pdu->mip_header.src_addr);
-    printf("    -message : %s \n", mip_pdu->sdu.message_payload);
-
-
-    // IF THE PING MESSAGE IS PONG
-    if (strncmp(mip_pdu->sdu.message_payload, "PONG:", 5) == 0) {
-        printf("Received PONG message, forwarding it to client app. \n");
-        struct sockaddr_un *address= malloc(sizeof(struct sockaddr_un));
-        if (address==NULL){
-            perror("could not malloc address in client");
-            exit(EXIT_FAILURE);
-        }
-        //testing that unix socket is porperly set up
-        char* recv_sock_path = malloc(12); //usockAclient
-        memcpy(recv_sock_path, socketPath, 6);
-        memcpy(recv_sock_path+6, "client\0",7);
-        printf("SOCKET PATH %s", recv_sock_path);
-        int unix_data_socket = setupUnixSocket(recv_sock_path, address);
-        
-        int status = unixSocket_connect(unix_data_socket, recv_sock_path, address);
-        if(status==-1){
-            printf("Could not connect to client application unix socket. In MIP, PDUs are delivered in a best effort, unreliable manner \n");
-            printf("The problem could be due to no client bound to unix socket at the time of transfer.\n");       
-            return 1;
-        }
-        printf("\n-----------sending to client app---------------\n");
-        status = write(unix_data_socket, mip_pdu->sdu.message_payload, strlen(mip_pdu->sdu.message_payload));
-        if(status<0){
-            printf("Could not send to client application. In MIP, PDUs are delivered in a best effort, unreliable manner \n");
-            printf("The problem could be due to no client bound to unix socket at the time of transfer.\n");       
-            return 1;
-        }
-        //printf("message %s sendt \n", packet->message);
-        struct mip_client_payload *payload = malloc(200);
-        char* recv_buff = malloc(5);
-        status= read(unix_data_socket,recv_buff, 5);
-        printf("RECEIVED ACK FROM CLIENT APP : %s \n",recv_buff );
         printf(" \n ================================= \n");
-        close(unix_data_socket);
-        free(recv_buff);
-        free(recv_sock_path); 
-        free(address);      
+        printf("    -Received message from %d  \n", mip_pdu->mip_header.src_addr);
+        printf("    -Message: %s \n", mip_pdu->sdu.message_payload);
 
-        return 1; //return to avoid infinite loop
+        // IF THE PING MESSAGE IS PONG
+        if (strncmp(mip_pdu->sdu.message_payload, "PONG:", 5) == 0) {
+            printf("Received PONG message, forwarding it to client app. \n");
+
+            // Allocate sockaddr_un and recv_sock_path for Unix socket communication
+            struct sockaddr_un *address = malloc(sizeof(struct sockaddr_un));
+            if (address == NULL) {
+                perror("could not malloc address in client");
+                exit(EXIT_FAILURE);
+            }
+            char *recv_sock_path = malloc(12); // usockAclient
+            memcpy(recv_sock_path, socketPath, 6);
+            memcpy(recv_sock_path + 6, "client\0", 7);
+            printf("SOCKET PATH %s", recv_sock_path);
+
+            // Set up Unix socket and send PONG to the client application
+            int unix_data_socket = setupUnixSocket(recv_sock_path, address);
+            int status = unixSocket_connect(unix_data_socket, recv_sock_path, address);
+            if (status == -1) {
+                printf("Could not connect to client application Unix socket. In MIP, PDUs are delivered in a best-effort, unreliable manner \n");
+                printf("The problem could be due to no client bound to Unix socket at the time of transfer.\n");
+                free(address);
+                free(recv_sock_path);
+                return 1;
+            }
+            printf("\n-----------sending to client app---------------\n");
+
+            status = write(unix_data_socket, mip_pdu->sdu.message_payload, strlen(mip_pdu->sdu.message_payload));
+            if (status < 0) {
+                printf("Could not send to client application. In MIP, PDUs are delivered in a best-effort, unreliable manner \n");
+                printf("The problem could be due to no client bound to Unix socket at the time of transfer.\n");
+                close(unix_data_socket);
+                free(address);
+                free(recv_sock_path);
+                return 1;
+            }
+
+            // Read ACK from client application
+            char *recv_buff = malloc(5);
+            status = read(unix_data_socket, recv_buff, 5);
+            printf("RECEIVED ACK FROM CLIENT APP: %s \n", recv_buff);
+            printf(" \n ================================= \n");
+
+            close(unix_data_socket);
+            free(recv_buff);
+            free(recv_sock_path);
+            free(address);
+
+            return 1; // Return to avoid infinite loop
+        } 
+        else { // If the message is PING
+            // Send PONG back to the sender
+            size_t message_len = strlen(mip_pdu->sdu.message_payload);  // Get the length of the message
+            size_t buffer_size = sizeof(uint8_t) + message_len + 1;     // +1 for null terminator
+
+            // Dynamically allocate buffer for PONG message
+            struct mip_client_payload *buffer_to_server = calloc(1, buffer_size);
+            if (buffer_to_server == NULL) {
+                perror("malloc for buffer_to_server failed");
+                return -1;
+            }
+
+            // Copy source address and message to buffer
+            uint8_t src_addr = mip_pdu->mip_header.src_addr;
+            buffer_to_server->dst_mip_addr = &src_addr;
+            buffer_to_server->message = mip_pdu->sdu.message_payload;
+
+            // Set up Unix socket to send PONG to server app
+            struct sockaddr_un *address = malloc(sizeof(struct sockaddr_un));
+            if (address == NULL) {
+                perror("could not malloc address in client");
+                free(buffer_to_server);
+                exit(EXIT_FAILURE);
+            }
+            int unix_data_socket = setupUnixSocket(socketPath, address);
+            unixSocket_connect(unix_data_socket, socketPath, address);
+            printf("\n-----------sending to server app---------------\n");
+
+            int status = unixSocket_send(unix_data_socket, buffer_to_server, buffer_size);
+            if (status < 0) {
+                perror("Could not send PONG to server");
+            }
+
+            // Read PONG response from server
+            char *recv_buff = malloc(200);
+            status = read(unix_data_socket, recv_buff, 200);
+            printf("RECEIVED PONG FROM SERVER: %s \n", recv_buff + 1);
+
+            // Send PONG response back to the original sender
+            uint8_t dst_mip_addr = mip_pdu->mip_header.src_addr;
+            uint8_t dst_mac_addr[6];
+            memcpy(dst_mac_addr, src_mac_addr, 6);
+
+            struct mip_pdu *pong_pdu = create_mip_pdu(PING, NULL, dst_mip_addr, recv_buff + 1, self_mip_addr);
+            status = send_raw_packet(raw_socket, pong_pdu, dst_mac_addr, socket_name);
+            if (status < 0) {
+                perror("send pong message failed");
+                free(buffer_to_server);
+                free(recv_buff);
+                free(pong_pdu->sdu.message_payload);
+                free(pong_pdu);
+                free(address);
+                return -1;
+            }
+            printf("    -PONG message relayed to dst host \n");
+            printf(" \n ================================= \n");
+
+            // Free dynamically allocated memory
+            free(buffer_to_server);
+            free(recv_buff);
+            free(pong_pdu->sdu.message_payload);
+            free(pong_pdu);
+            free(address);
+        }
     }
-    else{//if message is PING
-        // Beregn korrekt størrelse på bufferet basert på størrelsen på meldingen
-        size_t message_len = strlen(mip_pdu->sdu.message_payload);  // Finn lengden på meldingen
-        size_t buffer_size = sizeof(uint8_t) + message_len + 1;     // +1 for null-terminator
-
-        // Alloker dynamisk buffer for å holde dst_mip_addr og meldingen
-        struct mip_client_payload *buffer_to_server = calloc(1, buffer_size);
-
-        if (buffer_to_server == NULL) {
-            perror("malloc for buffer_to_server failed");
-            
-            return -1;
-        }
-
-        // Kopier src_addr til en midlertidig variabel
-        uint8_t src_addr = mip_pdu->mip_header.src_addr;
-
-        // Kopier src_addr til bufferet
-        buffer_to_server->dst_mip_addr= &src_addr;
-
-        // Kopier meldingen etter src_addr
-        buffer_to_server->message=  mip_pdu->sdu.message_payload;  // Inkluder null-terminator
-        
-    
-        struct sockaddr_un *address= malloc(sizeof(struct sockaddr_un));
-        if (address==NULL){
-            perror("could not malloc address in client");
-            exit(EXIT_FAILURE);
-        }
-        //testing that unix socket is porperly set up
-        int unix_data_socket = setupUnixSocket(socketPath, address);
-
-
-        unixSocket_connect(unix_data_socket, socketPath, address);
-        printf("\n-----------sending to server app---------------\n");
-        int status = unixSocket_send(unix_data_socket, buffer_to_server, buffer_size);
-        //printf("message %s sendt \n", packet->message);
-        struct mip_client_payload *payload = malloc(200);
-        char* recv_buff = malloc(200);
-        status= read(unix_data_socket,recv_buff, 200);
-        printf("RECEIVED PONG FROM SERVER : %s \n",recv_buff +1);
-
-        uint8_t dst_mip_addr = mip_pdu->mip_header.src_addr;
-        uint8_t dst_mac_addr[6] ;
-        memcpy(dst_mac_addr, src_mac_addr, 6);
-  
-        struct mip_pdu *pong_pdu =create_mip_pdu(PING,NULL,dst_mip_addr,recv_buff+1, self_mip_addr);
-
-        status = send_raw_packet(raw_socket, pong_pdu, dst_mac_addr,socket_name);
-        if (status <0){
-            perror("send pong message \n");
-            return -1;
-        }
-        printf("    -pong message releayed to dst host \n");
-        printf(" \n ================================= \n");
-
-        // Frigjør bufferet etter bruk
-        free(buffer_to_server);
-        free(payload);
-        close(unix_data_socket);
-    }
-}
 
     return 1;
 }
+
 int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, uint8_t self_mip_addr, struct ifs_data *ifs) {
     /* Håndterer eksisterende klient som sender pakker */
     struct mip_client_payload *buffer = malloc(sizeof(struct mip_client_payload));
@@ -354,6 +366,7 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
     if (bytes_read == -1) {
         close(sock_accept);
         perror("read unix sock");
+        free(buffer);
         return -1;
     }
 
@@ -377,7 +390,7 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
         // Send ARP over all interfaces
         for (int i = 0; i < ifs->ifn; i++) {
             printf("Sending ARP request on interface %d\n", i);
-            send_raw_packet(ifs->rsock[i], pdu, broadcast_addr, &ifs->addr[i]);  // Bruk den aktuelle socketen og sockaddr_ll
+            send_raw_packet(ifs->rsock[i], pdu, broadcast_addr, &ifs->addr[i]);
         }
 
         // Legg PDU i kø i påvente av ARP-svar
@@ -390,8 +403,11 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
         struct mip_pdu *pdu = create_mip_pdu(PING, REQUEST, buffer->dst_mip_addr, buffer->message, self_mip_addr);
         send_raw_packet(raw_socket, pdu, cache_entry->mac_address, cache_entry->if_addr);
     }
+
+    free(buffer->message);
+    free(buffer);
     printf(" \n ================================= \n");
-    
+
     return 1;
 }
 
@@ -487,6 +503,9 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
+    
+   
+    int mask = umask(0);
     unlink(socketPath); // Fjerne eventuell eksisterende socket
     unix_connection_socket = setupUnixSocket(socketPath, address);
     unix_data_socket = unixSocket_bind(unix_connection_socket, socketPath, address);
@@ -495,7 +514,7 @@ int main(int argc, char *argv[]) {
         perror("unixSocket_listen failed");
         exit(EXIT_FAILURE);
     }
-
+    umask(mask);
     // Håndtere hendelser (både raw sockets og UNIX sockets)
     handle_events(unix_connection_socket, ifs, cache, self_mip_addr, socketPath);
 
@@ -505,7 +524,7 @@ int main(int argc, char *argv[]) {
     }
     close(unix_connection_socket);
     close(unix_data_socket);
-    unlink(socketPath);
+
     free(address);
     free(ifs);
     free(cache);
