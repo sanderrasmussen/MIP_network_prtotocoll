@@ -17,18 +17,20 @@
 #include <arpa/inet.h>	/* htons */
 #include <ifaddrs.h>	/* getifaddrs */
 #include "cache.h"
-// Funksjon for å hente en oppføring fra cachen basert på MIP-adresse
+
+
+// Function for getting mac from cache belonging to a given MIP address
 struct entry* get_mac_from_cache(struct cache *cache, uint8_t mip_address){
     struct entry *current = cache->head;
 
-    // Gå gjennom cache-listen for å finne matchende MIP-adresse
+    // search 
     while(current != NULL){
         if (current->mip_address == mip_address){
             return current;  // Returner oppføringen hvis funnet
         }
         current = current->next;
     }
-    return NULL;  // Returner NULL hvis ikke funnet
+    return NULL;  // return if not found 
 }
 // Function to add or update an entry in the cache
 int add_to_cache(struct cache *cache, uint8_t mip_address, uint8_t *mac_address, struct sockaddr_ll *if_addr) {
@@ -78,11 +80,11 @@ int add_to_cache(struct cache *cache, uint8_t mip_address, uint8_t *mac_address,
 }
 
 
-// Function to add a PDU to the queue (linked list) for a specific MIP address
+// Function to add a PDU to the queue linked list for a specific MIP address
 int add_pdu_to_queue(struct cache *cache, uint8_t mip_address, struct mip_pdu *pdu) {
     struct entry *current = cache->head;
 
-    // Traverse the cache to find the entry with the matching MIP address
+    // traverse the cache to find the entry with the matching MIP address
     while (current != NULL) {
         if (current->mip_address == mip_address) {
             // Create a new node for the PDU
@@ -106,7 +108,7 @@ int add_pdu_to_queue(struct cache *cache, uint8_t mip_address, struct mip_pdu *p
             }
 
             printf("PDU added to queue for mip_address: %d\n", mip_address);
-            return 1;  // Return success
+            return 1;  //  success
         }
         current = current->next;
     }
@@ -150,12 +152,12 @@ void clear_cache(struct cache *cache) {
         struct pdu_node *pdu_node = current->pdu_list;
         while (pdu_node != NULL) {
             struct pdu_node *next_pdu = pdu_node->next;
-            free(pdu_node->pdu);  // Free the PDU
-            free(pdu_node);        // Free the node
+            free(pdu_node->pdu); 
+            free(pdu_node);        
             pdu_node = next_pdu;
         }
 
-        free(current);  // Free the cache entry
+        free(current);  // the cache entry
         current = next_entry;
     }
 

@@ -19,13 +19,12 @@
 
 #define MAX_EVENTS 10
 
-// Funksjon for å sende ping-melding til MIP daemon
+// For sending ping message to mipd
 void send_ping_message(int unix_socket, uint8_t dst_mip_addr, const char *message) {
     struct mip_client_payload * payload=malloc(100);
     payload->dst_mip_addr = dst_mip_addr;
     payload->message = message;
 
-    // Send meldingen til MIP daemon
     int status = unixSocket_send(unix_socket, payload, 100);
     if(status==-1){
         perror("send");
@@ -48,32 +47,31 @@ int main(int argc, char *argv[]) {
     char *socket_path = argv[1];
     uint8_t dst_mip_addr = (uint8_t)atoi(argv[2]);
     char *message = malloc(99);
-    strcpy(message, argv[3]);
-
+    strcpy(message, argv[3]); // this should null terminate the string 
 
     struct sockaddr_un address;
-
-    // Setup Unix-socket for å sende og motta meldinger
+    // Setup Unix-socket for sending messages to the mipd
     int unix_socket = setupUnixSocket(socket_path, &address);
     int status = unixSocket_connect(unix_socket, socket_path, &address);
     if (status == -1){
         perror("connect client");
     }
-    // Send ping-melding til MIP daemon
+    // Send ping to MIP daemon
      send_ping_message(unix_socket, dst_mip_addr, message);
     
     //closing the sending socket and creating a listening socket
     char *pong[200];
-    //create new recv socket :
+
+    //create new recv socket for listening to pongs :
     char* recv_sock_path = malloc(14); //usockAclient
     memcpy(recv_sock_path, socket_path, 6);
     memcpy(recv_sock_path+6, "client\0",8);
     struct sockaddr_un recv_addr;
     int recv_sock = setupUnixSocket(recv_sock_path, &recv_addr);
     unixSocket_bind(recv_sock, recv_sock_path, &recv_addr);
-    unixSocket_listen(recv_sock, recv_sock_path, 5);  // Backlog settes til 5
+    unixSocket_listen(recv_sock, recv_sock_path, 5);  // Backlog of 5
 
-    // Vent på tilkobling fra MIP daemon
+    //watitng for mipd to connect and send pong
     int accept_sock = accept(recv_sock, NULL, NULL);
     if (accept_sock == -1) {
         perror("accept failed");
@@ -82,14 +80,13 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    // Motta PONG-melding
-
-    memset(pong, 0, sizeof(pong));  // Initialiser mottaksbufferet
-    int bytes_read = read(accept_sock, pong, sizeof(pong) - 1);  // -1 for å sikre plass til null-terminator
+    // Receive PONG
+    memset(pong, 0, sizeof(pong)); 
+    int bytes_read = read(accept_sock, pong, sizeof(pong) - 1);  
 
     printf("Pong received: %s\n", pong  );
     write(accept_sock,"ACK\0",5);
-    // Lukk socket etter å ha mottatt svaret
+    //clean up
     close(accept_sock);
     close(recv_sock);
     unlink(recv_sock_path);

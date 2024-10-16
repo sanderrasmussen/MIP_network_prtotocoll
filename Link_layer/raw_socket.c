@@ -19,7 +19,7 @@
 #include "../NetworkLayer/mipd.h" /* Relevant interfaces from mipd.h */
 
 #define ETH_P_MIP 0x88B5
-
+// Just printing a mac address
 void print_mac_addr(uint8_t *addr, size_t len)
 {
 	size_t i;
@@ -29,38 +29,33 @@ void print_mac_addr(uint8_t *addr, size_t len)
 	}
 	printf("%02x\n", addr[i]);
 }
-
+// find all mac addresses from interfaces 
 void get_mac_from_interfaces(struct ifs_data *ifs)
 {
 	struct ifaddrs *ifaces, *ifp;
 	int i = 0;
 
-	/* Enumerate interfaces: */
-	/* Note in man getifaddrs that this function dynamically allocates
-	   memory. It becomes our responsability to free it! */
 	if (getifaddrs(&ifaces)) {
 		perror("getifaddrs");
 		exit(-1);
 	}
 
-	/* Walk the list looking for ifaces interesting to us */
 	for (ifp = ifaces; ifp != NULL; ifp = ifp->ifa_next) {
-		/* We make sure that the ifa_addr member is actually set: */
+		
 		if (ifp->ifa_addr != NULL &&
 		    ifp->ifa_addr->sa_family == AF_PACKET &&
 		    strcmp("lo", ifp->ifa_name))
-		/* Copy the address info into the array of our struct */
+
 		memcpy(&(ifs->addr[i++]),
 		       (struct sockaddr_ll*)ifp->ifa_addr,
 		       sizeof(struct sockaddr_ll));
 	}
-	/* After the for loop, the address info of all interfaces are stored */
-	/* Update the counter of the interfaces */
 	ifs->ifn = i;
 
-	/* Free the interface list */
+
 	freeifaddrs(ifaces);
 }
+// binding a socket to a given interface
 void bind_socket_to_interface(int sockfd, const char *interface, int protocol) {
     struct sockaddr_ll sll;
     struct ifreq ifr;
@@ -91,6 +86,7 @@ void bind_socket_to_interface(int sockfd, const char *interface, int protocol) {
     printf("Socket bound to interface %s\n", interface);
 }
 
+// initializing interfaces
 void init_ifs(struct ifs_data *ifs) {
     struct ifaddrs *ifaces, *ifp;
     int i = 0;
@@ -100,23 +96,22 @@ void init_ifs(struct ifs_data *ifs) {
         exit(EXIT_FAILURE);
     }
 
-    // Opprett en socket per grensesnitt
+    // one sock per if
     for (ifp = ifaces; ifp != NULL; ifp = ifp->ifa_next) {
         if (ifp->ifa_addr != NULL &&
             ifp->ifa_addr->sa_family == AF_PACKET &&
             strcmp("lo", ifp->ifa_name)) {
 
-            // Opprett socket for hvert grensesnitt
+         
             int sockfd = setupRawSocket();
             bind_socket_to_interface(sockfd, ifp->ifa_name, ETH_P_MIP);  // Bind socket til grensesnitt
 
-            // Lagre socket og adresseinformasjon i ifs_data
             ifs->rsock[i] = sockfd;
             memcpy(&(ifs->addr[i]), (struct sockaddr_ll *)ifp->ifa_addr, sizeof(struct sockaddr_ll));
             i++;
         }
     }
-    ifs->ifn = i;  // Antall grensesnitt
+    ifs->ifn = i; // amount of interfaces
     freeifaddrs(ifaces);
 }
 
@@ -133,6 +128,8 @@ int setupRawSocket(){
     return raw_sockfd;
 
 }
+
+// Listens on socket and receives buffer, deserializes it, creates pdu and returns it to us
 struct mip_pdu * recv_pdu_from_raw(int rawSocket, uint8_t *src_mac_addre){ // the src mac addr is the buffer we store the mac address of the sender in so that we can cache the mip and mac
     int status;
     size_t pdu_length = 100; //hardcoded sadly
@@ -181,7 +178,7 @@ struct mip_pdu * recv_pdu_from_raw(int rawSocket, uint8_t *src_mac_addre){ // th
     
     return pdu;
 }
-
+// Takes in pdu, serializes it to a buffer and sends it to the destination mac address over the network. Before calling this function, create a pdu and set pdu types. can be used when sending arps responses pings and so on.
 int send_raw_packet(int raw_socket, struct mip_pdu *mip_pdu, uint8_t *dst_mac_address, struct sockaddr_ll *addr) {
     struct ether_frame ethernet_header;
     struct msghdr *message_header;
@@ -226,7 +223,7 @@ int send_raw_packet(int raw_socket, struct mip_pdu *mip_pdu, uint8_t *dst_mac_ad
 
     return 1;
 }
-
+// using send raw packet to send an arp response to the arp requests packet src address. Takes in the ARP pdu as parameter, received_pdu.
 int send_arp_response(int rawSocket,  struct mip_pdu *received_pdu, size_t length, uint8_t *dst_mac_addr, uint8_t *self_mip_addr, struct sockaddr_ll *addr){
     /* create mip pdu first of type ARP RESPONSE , the message argument does not matter here*/
     received_pdu->sdu.arp_msg_payload->type= RESPONSE;
@@ -248,14 +245,4 @@ int send_arp_response(int rawSocket,  struct mip_pdu *received_pdu, size_t lengt
 
     return 1;
 }
-
-int handle_arp_packet(int raw_sock ,struct mip_pdu *arp_message ){
-
-    //if we reached this, then the packet is not an arp message
-    close(raw_sock);
-    return 1;
-}
-
-
-//THESE PDU METHODS SHOULD BE MOVED TO SEPERATE FILE FOR ORGANIZINGS SAKE
 
