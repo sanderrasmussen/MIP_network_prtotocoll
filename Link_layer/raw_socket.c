@@ -169,7 +169,7 @@ struct mip_pdu * recv_pdu_from_raw(int rawSocket, uint8_t *src_mac_addre){ // th
     memcpy(src_mac_addre, ethernet_frame_header.src_addr,6);
     //derserialize pdu buffer
     pdu = deserialize_pdu(serilzd_pdu, pdu_length);
-
+    free(serilzd_pdu);
     printf(" received packet from src mip addresse  : %d \n ",  pdu->mip_header.src_addr);
 
     if(pdu->mip_header.sdu_type==MIP_ARP){
