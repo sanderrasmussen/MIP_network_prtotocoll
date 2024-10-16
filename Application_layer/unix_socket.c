@@ -18,9 +18,8 @@
 #include <ifaddrs.h>	/* getifaddrs */
 #include "unix_socket.h"
 
-    
-//struct sockaddr_un *address= malloc(sizeof(struct sockaddr_un));
 
+// creating unix socket and crearing address structure
 int setupUnixSocket(char *pathToSocket, struct sockaddr_un *address){
 
     int status;
@@ -34,12 +33,11 @@ int setupUnixSocket(char *pathToSocket, struct sockaddr_un *address){
     if(unix_sockfd== -1){
         fprintf(stderr, "Error: could not create socket ");
         close(unix_sockfd);
-        unlink(pathToSocket);
         exit(EXIT_FAILURE);
     };
     return unix_sockfd;
 }
-/*server function*/
+/*Binding socket to socket file, before this function unlink must be called on the file. Only one can be bound at a time.*/
 int unixSocket_bind(int unix_sockfd, char *pathToSocket, struct sockaddr_un *address){
     int status;
     int unix_data_socket;
@@ -49,31 +47,30 @@ int unixSocket_bind(int unix_sockfd, char *pathToSocket, struct sockaddr_un *add
     strncpy(address->sun_path, pathToSocket, sizeof(address->sun_path)-1);
     /* Using umask to give file permissions*/
     int mask =umask(0);
-    unlink(pathToSocket);
+
     status = bind(unix_sockfd,(struct sockaddr *) address, sizeof(struct sockaddr_un));
     if(status== -1){
         fprintf(stderr, "Error: could not bind socket ");
         close(unix_sockfd);
         umask(mask);
-        unlink(pathToSocket);
+
         exit(EXIT_FAILURE);
     };
     umask(mask);
     return unix_data_socket;
 }
-//server function
+// listening on unix connections
 int unixSocket_listen(int unix_sockfd, char *pathToSocket, int unix_data_socket){
     /* Opening listening for connections*/
     int status = listen(unix_sockfd,20);
     if(status== -1){
         fprintf(stderr, "Error: could not listen on socket ");
         close(unix_sockfd);
-        unlink(pathToSocket);
         exit(EXIT_FAILURE);
     };
     return 1;
 }
-//client function
+// connecting socket to a bound listening socket on another proccess
 int unixSocket_connect(int unix_sockfd, char *pathToSocket, struct sockaddr_un *address){
 
     int status;
@@ -88,9 +85,11 @@ int unixSocket_connect(int unix_sockfd, char *pathToSocket, struct sockaddr_un *
         close(unix_sockfd);
     };
     return status;
-}   int unixSocket_send(int unix_data_socket, struct mip_client_payload *payload,size_t message_len_bytes) {
-    size_t message_len_byte = strlen(payload->message); // Få lengden på meldingen
-    char *packet_buffer = malloc(message_len_bytes + sizeof(uint8_t) + 1); // +1 for null terminator
+}   
+// Sending payload as a buffer over the domain unix socket to the other end.
+int unixSocket_send(int unix_data_socket, struct mip_client_payload *payload,size_t message_len_bytes) {
+    size_t message_len_byte = strlen(payload->message); 
+    char *packet_buffer = malloc(message_len_bytes + sizeof(uint8_t) ); 
 
     if (packet_buffer == NULL) {
         perror("Error: malloc failed");
@@ -111,6 +110,7 @@ int unixSocket_connect(int unix_sockfd, char *pathToSocket, struct sockaddr_un *
     free(packet_buffer); // Frigjør minnet etter sending
     return status; // Returner status
 }
+// receiving and storing in client payload structure
 int unixSocket_recieve(int unix_data_socket, struct mip_client_payload *payload){
     int status= read(unix_data_socket,payload, sizeof(struct mip_client_payload));
     if(status==-1){
@@ -118,11 +118,7 @@ int unixSocket_recieve(int unix_data_socket, struct mip_client_payload *payload)
         exit(EXIT_FAILURE);
     }
 }
-int close_unix_socket(int socket, char *socketname){
-    close(socket);
-    unlink(socketname);
-}
-
+// adding socket to epoll so that we can queue them
 int add_to_epoll_table(int epoll_socket, struct epoll_event *event, int socket){
 	int status = 0;
 	//event->events = EPOLLIN|EPOLLHUP;
