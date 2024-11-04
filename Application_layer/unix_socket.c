@@ -110,6 +110,32 @@ int unixSocket_send(int unix_data_socket, struct mip_client_payload *payload,siz
     free(packet_buffer); // Frigjør minnet etter sending
     return status; // Returner status
 }
+// Sending a message as a buffer over the UNIX domain socket to the other end.
+int unixSocket_send_String(int unix_data_socket, char *message, size_t message_len_bytes) {
+    // Allocate a buffer for the packet (address + message)
+    char *packet_buffer = malloc(message_len_bytes); 
+
+    if (packet_buffer == NULL) {
+        perror("Error: malloc failed");
+        return -1;
+    }
+
+    memcpy(packet_buffer , message, message_len_bytes); // Copy message content
+    packet_buffer[message_len_bytes] = '\0'; // Null-terminator for safety
+
+    // Send the buffer through the UNIX socket
+    int status = write(unix_data_socket, packet_buffer, sizeof(uint8_t) + message_len_bytes + 1);
+
+    if (status == -1) {
+        perror("Error: unix socket write");
+        free(packet_buffer); // Free memory before returning in case of error
+        return -1;
+    }
+
+    free(packet_buffer); // Free allocated memory after sending
+    return status; // Return the status of the write operation
+}
+
 // receiving and storing in client payload structure
 int unixSocket_recieve(int unix_data_socket, struct mip_client_payload *payload){
     int status= read(unix_data_socket,payload, sizeof(struct mip_client_payload));

@@ -20,6 +20,7 @@ struct mip_header{
 which can be mip_arp og ping*/
 #define MIP_ARP 0x01
 #define PING 0x02
+#define ROUTER 0x04
 
 
 struct mip_pdu{
