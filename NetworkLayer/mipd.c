@@ -176,7 +176,9 @@ struct mip_pdu* create_mip_pdu( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_
     return NULL; //180
 
 }
-int handle_arp(struct mip_pdu *mip_pdu, uint8_t src_mac_addr, struct cache *cache, uint8_t self_mip_addr, int raw_socket,struct sockaddr_ll *socket_name){
+int handle_arp(struct mip_pdu *mip_pdu, uint8_t *src_mac, struct cache *cache, uint8_t self_mip_addr, int raw_socket,struct sockaddr_ll *socket_name){
+    uint8_t src_mac_addr[6] ;
+    memcpy(src_mac_addr,src_mac,6);
        if (mip_pdu->sdu.arp_msg_payload->type == REQUEST) {
             printf(" \n ================================= \n");
             printf("received ARP REQUEST from :");
@@ -221,7 +223,9 @@ int handle_arp(struct mip_pdu *mip_pdu, uint8_t src_mac_addr, struct cache *cach
             printf(" \n ================================= \n");
         }
 }
-int handle_ping(struct mip_pdu *mip_pdu, uint8_t src_mac_addr, struct cache *cache, uint8_t self_mip_addr, int raw_socket,struct sockaddr_ll *socket_name, char *socketPath){
+int handle_ping(struct mip_pdu *mip_pdu, uint8_t *src_mac, struct cache *cache, uint8_t self_mip_addr, int raw_socket,struct sockaddr_ll *socket_name, char *socketPath){
+    uint8_t src_mac_addr[6] ;
+    memcpy(src_mac_addr,src_mac,6);
     // IF THE PING MESSAGE IS PONG
         if (strncmp(mip_pdu->sdu.message_payload, "PONG:", 5) == 0) {
             printf("Received PONG message, forwarding it to client app. \n");
@@ -258,7 +262,7 @@ int handle_ping(struct mip_pdu *mip_pdu, uint8_t src_mac_addr, struct cache *cac
                 free(recv_sock_path);
                 return 1;
             }
-
+    
             // Read ACK from client application
             char *recv_buff = malloc(5);
             status = read(unix_data_socket, recv_buff, 5);
@@ -371,7 +375,7 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
     memset(recv_buffer, 0, sizeof(recv_buffer));
     printf(" \n ================================= \n");
     int bytes_read = read(sock_accept, recv_buffer, sizeof(recv_buffer));
-    if (bytes_read <0 ) {
+    if (bytes_read ==-1 ) {
         close(sock_accept);
         perror("read unix sock");
         free(buffer);
