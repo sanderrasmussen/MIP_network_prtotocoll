@@ -141,7 +141,7 @@ struct mip_pdu* create_mip_pdu( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_
 
         return mip_pdu; 
     }
-    else if(sdu_type==PING){
+    else {
         //fill mip header
          /* HEADER: 
      +--------------+-------------+---------+-----------+-----------+
@@ -169,7 +169,7 @@ struct mip_pdu* create_mip_pdu( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_
 
         mip_pdu->sdu.message_payload = malloc(strlen(message)+1);
         memcpy(mip_pdu->sdu.message_payload, message, strlen(message)+1);
-
+    
         return mip_pdu; 
     }
 
@@ -341,9 +341,16 @@ int handle_ping(struct mip_pdu *mip_pdu, uint8_t *src_mac, struct cache *cache, 
             free(address);
         }
 }
-int handle_router_package(int raw, uint8_t *src_mac_addr){
-
-
+int handle_router_package(struct mip_pdu *pdu ,int raw, uint8_t *src_mac){
+    uint8_t src_mac_addr[6];
+    memcpy(src_mac_addr, src_mac,6);
+    //check if Hello or update
+    if (strncmp(pdu->sdu.message_payload, "HELLO", 5) == 0){
+        //send update own routing table with neigbour
+    }
+    else if(strncmp(pdu->sdu.message_payload, "UPPDATE", 7) == 0){
+        //uppdate routes
+    }
     return 0;
 }
 // The main function for handling incomming raw socket connections. The packet types are checked and handled accordingly.
@@ -362,7 +369,8 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
         handle_ping(mip_pdu, src_mac_addr,cache,self_mip_addr,raw_socket,socket_name, socketPath);
     }
     else if (mip_pdu->mip_header.sdu_type == ROUTER){
-        handle_router_package(raw_socket,src_mac_addr);
+        handle_router_package(raw_socket,src_mac_addr, mip_pdu );
+
     }
     return 1;
 }
