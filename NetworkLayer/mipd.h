@@ -22,7 +22,7 @@ which can be mip_arp og ping*/
 #define PING 0x02
 #define ROUTER 0x04
 
-
+//for the router the mip pdu will contain the routing table information
 struct mip_pdu{
     struct mip_header mip_header; //32 bits
     union{
@@ -32,7 +32,7 @@ struct mip_pdu{
     }sdu;
 }__attribute__((packed));
 
-struct mip_pdu* create_mip_pdu( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_mip_addr, char *message, uint8_t src_address);
+//struct mip_pdu* create_mip_pdu( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_mip_addr, char *message, uint8_t src_address);
 size_t serialize_pdu(struct mip_pdu *mip_pdu, char* buffer);
 struct mip_pdu* deserialize_pdu(char* buffer, size_t length);
 

@@ -42,7 +42,7 @@ int setupRawSocket();
 struct mip_pdu * recv_pdu_from_raw(int rawSocket, uint8_t *src_mac_addr);
 /*here we loop through all the interfaces looking for an interface with*/
 void print_mac_addr(uint8_t *addr, size_t len);
-
+int send_broadcast_message(int raw, struct ifs_data *ifs, struct mip_pdu* pdu );
 
 void get_mac_from_interfaces(struct ifs_data *);
 

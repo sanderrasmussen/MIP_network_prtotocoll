@@ -246,3 +246,13 @@ int send_arp_response(int rawSocket,  struct mip_pdu *received_pdu, size_t lengt
     return 1;
 }
 
+int send_broadcast_message(int raw, struct ifs_data *ifs, struct mip_pdu* pdu){
+    uint8_t broadcast_addr[] = BROADCAST_ADDRESS;
+
+    // Send ARP over all interfaces
+    for (int i = 0; i < ifs->ifn; i++) {
+        printf("Sending ARP request on interface %d\n", i);
+        send_raw_packet(ifs->rsock[i], pdu, broadcast_addr, &ifs->addr[i]);
+    }     
+    return 0;
+}
