@@ -88,6 +88,7 @@ void handle_request(int unix_socket) {
     // Implementer logikken for behandling av forespørsler her
 }
 
+
 // Funksjon for å håndtere epoll-hendelser
 void handle_router_events(int epoll_fd, int unix_socket, int hello_timer_fd, int update_timer_fd, char * socket_path, char *mipd_socket_path, struct sockaddr_un *address) {
     struct epoll_event events[MAX_EVENTS];

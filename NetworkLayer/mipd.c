@@ -60,7 +60,7 @@ size_t serialize_pdu(struct mip_pdu *mip_pdu, char* buffer){
         // serialize ARP message
         memcpy(buffer + offset, mip_pdu->sdu.arp_msg_payload, ARP_SDU_SIZE);
         offset += ARP_SDU_SIZE;
-    } else if (mip_pdu->mip_header.sdu_type == PING) {
+    } else  {
         // Serialize regular message payload
         memcpy(buffer + offset, mip_pdu->sdu.message_payload, mip_pdu->mip_header.sdu_len);
         offset += mip_pdu->mip_header.sdu_len;
@@ -90,7 +90,7 @@ struct mip_pdu* deserialize_pdu(char* buffer, size_t length) {
         mip_pdu->sdu.arp_msg_payload = (struct mip_arp_message*)malloc(ARP_SDU_SIZE);
         memcpy(mip_pdu->sdu.arp_msg_payload, buffer + offset, ARP_SDU_SIZE);
         offset += ARP_SDU_SIZE;
-    } else if (mip_pdu->mip_header.sdu_type == PING) {
+    } else {
         // Deserialize regular message payload
         mip_pdu->sdu.message_payload = (char*)malloc(mip_pdu->mip_header.sdu_len);
         memcpy(mip_pdu->sdu.message_payload, buffer + offset, mip_pdu->mip_header.sdu_len);
@@ -308,12 +308,12 @@ int handle_ping(struct mip_pdu *mip_pdu, uint8_t *src_mac, struct cache *cache, 
             if (status < 0) {
                 perror("Could not send PONG to server");
             }
-
+            
             // Read PONG response from server
             char *recv_buff = malloc(200);
             status = read(unix_data_socket, recv_buff, 200);
             printf("RECEIVED PONG FROM SERVER: %s \n", recv_buff + 1);
-
+            close(unix_data_socket);
             // Send PONG response back to the original sender
             uint8_t dst_mip_addr = mip_pdu->mip_header.src_addr;
             uint8_t dst_mac_addr[6];
@@ -344,12 +344,21 @@ int handle_ping(struct mip_pdu *mip_pdu, uint8_t *src_mac, struct cache *cache, 
 int handle_router_package(struct mip_pdu *pdu ,int raw, uint8_t *src_mac){
     uint8_t src_mac_addr[6];
     memcpy(src_mac_addr, src_mac,6);
+    printf("handling router package\n");
     //check if Hello or update
+
+
+    
     if (strncmp(pdu->sdu.message_payload, "HELLO", 5) == 0){
         //send update own routing table with neigbour
+        printf("received hello package\n");
     }
     else if(strncmp(pdu->sdu.message_payload, "UPPDATE", 7) == 0){
         //uppdate routes
+        printf("received update package \n");
+    }
+    else{
+        printf(" UNVALID ROUTER PACKAGE\n");
     }
     return 0;
 }
@@ -369,7 +378,8 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
         handle_ping(mip_pdu, src_mac_addr,cache,self_mip_addr,raw_socket,socket_name, socketPath);
     }
     else if (mip_pdu->mip_header.sdu_type == ROUTER){
-        handle_router_package(raw_socket,src_mac_addr, mip_pdu );
+        printf("received router package \n");
+        handle_router_package(mip_pdu,raw_socket,src_mac_addr );
 
     }
     return 1;
@@ -389,7 +399,7 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
         free(buffer);
         return -1;
     }
-    printf("message read ");
+    printf("message read \n");
     /* checking if it is a roputer hello message, first byte from client will always be a mip address so this should work.*/
     if (strncmp(recv_buffer, "HELLO", 5) == 0){
         printf("\n ++++++Router wants to send HELLO messages to nearby hosts.++++++\n");
@@ -398,12 +408,14 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
         //send arp package over all interfaces to all conneted hosts
         send_broadcast_message(raw_socket,ifs,pdu);
         printf("HELLO broadcast message relayed\n");
+        close(sock_accept);
         free(buffer);
         return 0;   
     }
     else if (strncmp(recv_buffer, "UPPDATE", 7) == 0){
         printf("\n ++++++Router wants to send UPPDATE messages to nearby hosts.++++++\n");
         free(buffer);
+        close(sock_accept);
         return 0;
     }
     else{
@@ -445,7 +457,7 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
         free(buffer->message);
         free(buffer);
         printf(" \n ================================= \n");
-
+        close(sock_accept);
         return 1;
     }
     return 0;
@@ -479,6 +491,7 @@ void handle_events(int unix_socket, struct ifs_data *ifs, struct cache *cache, u
         }
 
         for (int i = 0; i < readyIOs; i++) {
+            printf("\n ///WATING FOR PACKAGES///\n");
             if (events[i].data.fd == unix_socket) {
                 int sock_accept = accept(unix_socket, NULL, NULL);
                 if (sock_accept == -1) {

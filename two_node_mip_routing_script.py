@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-"""Mininet script for testing two-node MIP and routing daemons"""
+"""Mininet script for testing two-node MIP and routing daemons with gdb debugging."""
 
 from mininet.topo import Topo
 from mininet.cli import CLI
@@ -49,34 +49,34 @@ def init_twonode(self, line):
     A = net.get('A')
     B = net.get('B')
 
-    # MIP Daemons
+    # MIP Daemons with gdb
     terms.append(openTerm(self,
                           node=A,
-                          title="MIP A",
+                          title="MIP A (gdb)",
                           geometry="80x14+0+0",
-                          cmd="./mipd -d usockA 10"))
+                          cmd="gdb --args ./mipd -d usockA 10"))
 
     terms.append(openTerm(self,
                           node=B,
-                          title="MIP B",
+                          title="MIP B (gdb)",
                           geometry="80x14+0+450",
-                          cmd="./mipd -d usockB 20"))
+                          cmd="gdb --args ./mipd -d usockB 20"))
 
     # Sleep for 3 sec to ensure that the MIP daemons are ready
     time.sleep(3)
 
-    # Routing Daemons
+    # Routing Daemons with gdb
     terms.append(openTerm(self,
                           node=A,
-                          title="ROUTING A",
+                          title="ROUTING A (gdb)",
                           geometry="80x14+0+210",
-                          cmd="./routingd -d usockA"))
+                          cmd="gdb --args ./routingd -d usockA"))
 
     terms.append(openTerm(self,
                           node=B,
-                          title="ROUTING B",
+                          title="ROUTING B (gdb)",
                           geometry="80x14+0+660",
-                          cmd="./routingd -d usockB"))
+                          cmd="gdb --args ./routingd -d usockB"))
 
     # Give time for routing daemons to converge
     time.sleep(15)
