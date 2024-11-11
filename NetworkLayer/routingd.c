@@ -86,6 +86,13 @@ int setup_periodic_timer(int interval) {
 void handle_request(int unix_socket) {
     printf("Handling incoming request...\n");
     // Implementer logikken for behandling av forespørsler her
+    struct mip_client_payload mip_payload;
+    //char *payload = malloc(strlen("UPDATE")+ sizeof(uint8_t));//TEMP ONLY HELLE MESSAGE SUPPORT, ALSO NEEDS UPDATE ADVERTISINGS 
+    //unixSocket_recieve(unix_socket,&mip_payload);
+    //if (strncmp(&mip_payload, "HELLO", 5) == 0){
+    //    printf(" ======discovered new host %s ====== \n", &mip_payload+5);
+    //}
+    
 }
 
 

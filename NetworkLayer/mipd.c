@@ -349,20 +349,59 @@ int handle_router_package(struct mip_pdu *pdu ,int raw, uint8_t *src_mac, char* 
 
 
     
-    if (strncmp(pdu->sdu.message_payload, "HELLO", 5) == 0){
-        //send update own routing table with neigbour
-        printf("received hello package\n");
-        // relay hello to router
-        char * routerPath= malloc(strlen(sock_path)+ strlen("_routingd"));
-        strcpy(routerPath, sock_path);
-        strcat(routerPath, "_routingd") ;
-        struct sockaddr_un addr;
-        int router_sock= setupUnixSocket(routerPath,&addr );
-        int status = unixSocket_connect(router_sock,routerPath,&addr);
-        char * payload = "HELLO received \0";
-        unixSocket_send_String(router_sock,payload, strlen(payload));
-        close(router_sock);
+if (strncmp(pdu->sdu.message_payload, "HELLO", 5) == 0) {
+    // Received a HELLO message, forwarding to routing daemon
+    printf("received hello package\n");
+    // Create the path for the routing daemon socket
+    char *routerPath = malloc(strlen(sock_path) + strlen("_routingd") + 1); // +1 for null terminator
+    if (!routerPath) {
+        perror("malloc failed for routerPath");
+        return -1; // Handle error
     }
+    strcpy(routerPath, sock_path);
+    strcat(routerPath, "_routingd");
+    struct sockaddr_un *address = malloc(sizeof(struct sockaddr_un));
+    if (!address) {
+        perror("malloc failed for address");
+        free(routerPath);
+        return -1;
+    }
+    // Set up connection to the routing daemon
+    int router_sock = setupUnixSocket(routerPath, address);
+    int status = unixSocket_connect(router_sock, routerPath, address);
+    if (status == -1) {
+        perror("connect to router");
+        free(routerPath);
+        free(address);
+        close(router_sock);
+        return -1;
+    }
+    // Prepare payload, including the source address of the MIP node
+    char *payload = malloc(strlen("HELLO") + 1 + sizeof(uint8_t)); // "HELLO" + 1 null byte + src_addr
+    if (!payload) {
+        perror("malloc failed for payload");
+        free(routerPath);
+        free(address);
+        close(router_sock);
+        return -1;
+    }
+    strcpy(payload, "HELLO");
+    // Use a temporary variable for src_addr since it’s a bit-field
+    uint8_t src_addr_value = pdu->mip_header.src_addr;
+    memcpy(payload + strlen("HELLO"), &src_addr_value, sizeof(uint8_t));
+    // Send payload to the routing daemon
+    status = unixSocket_send_String(router_sock, payload, strlen("HELLO") + sizeof(uint8_t));
+    if (status < 0) {
+        perror("unixSocket_send_String");
+    }
+
+    // Cleanup
+    close(router_sock);
+    free(routerPath);
+    free(address);
+    free(payload);
+}
+
     else if(strncmp(pdu->sdu.message_payload, "UPPDATE", 7) == 0){
         //uppdate routes
         printf("received update package \n");
@@ -409,6 +448,7 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
         free(buffer);
         return -1;
     }
+    close(sock_accept);
     printf("message read \n");
     /* checking if it is a roputer hello message, first byte from client will always be a mip address so this should work.*/
     if (strncmp(recv_buffer, "HELLO", 5) == 0){
@@ -418,18 +458,18 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
         //send arp package over all interfaces to all conneted hosts
         send_broadcast_message(raw_socket,ifs,pdu);
         printf("HELLO broadcast message relayed\n");
-        close(sock_accept);
+
         free(buffer);
         return 0;   
     }
     else if (strncmp(recv_buffer, "UPPDATE", 7) == 0){
         printf("\n ++++++Router wants to send UPPDATE messages to nearby hosts.++++++\n");
         free(buffer);
-        close(sock_accept);
+
         return 0;
     }
     else{
-                // else: here it will handle client or server messages
+        // else: here it will handle client or server messages
         size_t message_len = strlen(recv_buffer) - sizeof(uint8_t);
         buffer->message = malloc(message_len + 1);
         memset(buffer->message, 0, message_len + 1);
@@ -467,9 +507,10 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
         free(buffer->message);
         free(buffer);
         printf(" \n ================================= \n");
-        close(sock_accept);
+
         return 1;
     }
+
     return 0;
 
 }
@@ -509,6 +550,7 @@ void handle_events(int unix_socket, struct ifs_data *ifs, struct cache *cache, u
                     continue;
                 }
                 serve_unix_connection(sock_accept, ifs->rsock[0], cache, self_mip_addr, ifs);
+                //close(sock_accept);
             } else {
                 // Håndtere hendelser på raw sockets
                 for (int j = 0; j < ifs->ifn; j++) {
