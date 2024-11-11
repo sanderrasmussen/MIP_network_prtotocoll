@@ -24,7 +24,7 @@ class He1Topo(Topo):
         # Initialize topology
         Topo.__init__(self)
 
-        # Create 3 hosts, A, B, and C..
+        # Create 3 hosts, A, B, and C.
         A = self.addHost('A')
         B = self.addHost('B')
         C = self.addHost('C')

@@ -101,8 +101,14 @@ void handle_router_events(int epoll_fd, int unix_socket, int hello_timer_fd, int
 
         for (int i = 0; i < num_events; i++) {
             if (events[i].data.fd == unix_socket) {
-                // Håndter innkommende forespørsel
-                handle_request(unix_socket);
+                int client_fd = accept(unix_socket, NULL, NULL);
+                if (client_fd == -1) {
+                    perror("accept");
+                    continue;
+                }
+                printf("New client connected\n");
+                handle_request(client_fd);
+                close(client_fd);
             } else if (events[i].data.fd == hello_timer_fd) {
                 // Timer for HELLO utløpt - send HELLO-melding
                 uint64_t expirations;

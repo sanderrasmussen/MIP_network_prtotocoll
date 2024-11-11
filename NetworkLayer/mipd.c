@@ -341,7 +341,7 @@ int handle_ping(struct mip_pdu *mip_pdu, uint8_t *src_mac, struct cache *cache, 
             free(address);
         }
 }
-int handle_router_package(struct mip_pdu *pdu ,int raw, uint8_t *src_mac){
+int handle_router_package(struct mip_pdu *pdu ,int raw, uint8_t *src_mac, char* sock_path){
     uint8_t src_mac_addr[6];
     memcpy(src_mac_addr, src_mac,6);
     printf("handling router package\n");
@@ -352,6 +352,16 @@ int handle_router_package(struct mip_pdu *pdu ,int raw, uint8_t *src_mac){
     if (strncmp(pdu->sdu.message_payload, "HELLO", 5) == 0){
         //send update own routing table with neigbour
         printf("received hello package\n");
+        // relay hello to router
+        char * routerPath= malloc(strlen(sock_path)+ strlen("_routingd"));
+        strcpy(routerPath, sock_path);
+        strcat(routerPath, "_routingd") ;
+        struct sockaddr_un addr;
+        int router_sock= setupUnixSocket(routerPath,&addr );
+        int status = unixSocket_connect(router_sock,routerPath,&addr);
+        char * payload = "HELLO received \0";
+        unixSocket_send_String(router_sock,payload, strlen(payload));
+        close(router_sock);
     }
     else if(strncmp(pdu->sdu.message_payload, "UPPDATE", 7) == 0){
         //uppdate routes
@@ -379,7 +389,7 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
     }
     else if (mip_pdu->mip_header.sdu_type == ROUTER){
         printf("received router package \n");
-        handle_router_package(mip_pdu,raw_socket,src_mac_addr );
+        handle_router_package(mip_pdu,raw_socket,src_mac_addr, socketPath );
 
     }
     return 1;

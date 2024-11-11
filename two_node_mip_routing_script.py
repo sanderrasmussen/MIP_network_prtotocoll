@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-"""Mininet script for testing two-node MIP and routing daemons with gdb debugging."""
+"""Mininet script for testing two-node MIP and routing daemons, with separate options for running with or without gdb."""
 
 from mininet.topo import Topo
 from mininet.cli import CLI
@@ -11,7 +11,6 @@ import time
 
 # Usage example:
 # sudo -E mn --mac --custom two_node_mip_routing_script.py --topo twonode --link tc
-
 
 class TwoNodeTopo(Topo):
     "Simple topology with two nodes for MIP and routing tests."
@@ -32,7 +31,6 @@ class TwoNodeTopo(Topo):
 
 terms = []
 
-
 def openTerm(self, node, title, geometry, cmd="bash"):
     display, tunnel = tunnelX11(node)
     return node.popen(["xterm",
@@ -43,13 +41,13 @@ def openTerm(self, node, title, geometry, cmd="bash"):
                        "-e", cmd])
 
 
-def init_twonode(self, line):
-    "init is an example command to extend the Mininet CLI"
+def init_twonode_with_gdb(self, line):
+    "Initialize both nodes with gdb debugging"
     net = self.mn
     A = net.get('A')
     B = net.get('B')
 
-    # MIP Daemons with gdb
+    # Start MIP Daemon on Node A and Node B with gdb
     terms.append(openTerm(self,
                           node=A,
                           title="MIP A (gdb)",
@@ -65,7 +63,7 @@ def init_twonode(self, line):
     # Sleep for 3 sec to ensure that the MIP daemons are ready
     time.sleep(3)
 
-    # Routing Daemons with gdb
+    # Start Routing Daemon on Node A and Node B with gdb
     terms.append(openTerm(self,
                           node=A,
                           title="ROUTING A (gdb)",
@@ -82,14 +80,53 @@ def init_twonode(self, line):
     time.sleep(15)
 
 
+def init_twonode_without_gdb(self, line):
+    "Initialize both nodes without gdb"
+    net = self.mn
+    A = net.get('A')
+    B = net.get('B')
+
+    # Start MIP Daemon on Node A and Node B without gdb
+    terms.append(openTerm(self,
+                          node=A,
+                          title="MIP A",
+                          geometry="80x14+0+0",
+                          cmd="./mipd -d usockA 10"))
+
+    terms.append(openTerm(self,
+                          node=B,
+                          title="MIP B",
+                          geometry="80x14+0+450",
+                          cmd="./mipd -d usockB 20"))
+
+    # Sleep for 3 sec to ensure that the MIP daemons are ready
+    time.sleep(3)
+
+    # Start Routing Daemon on Node A and Node B without gdb
+    terms.append(openTerm(self,
+                          node=A,
+                          title="ROUTING A",
+                          geometry="80x14+0+210",
+                          cmd="./routingd -d usockA"))
+
+    terms.append(openTerm(self,
+                          node=B,
+                          title="ROUTING B",
+                          geometry="80x14+0+660",
+                          cmd="./routingd -d usockB"))
+
+    # Give time for routing daemons to converge
+    time.sleep(15)
+
+
 # Mininet Callbacks
 
-# Inside mininet console run `init_twonode`
-CLI.do_init_twonode = init_twonode
+# Inside mininet console run `init_twonode_with_gdb` or `init_twonode_without_gdb`
+CLI.do_init_twonode_with_gdb = init_twonode_with_gdb
+CLI.do_init_twonode_without_gdb = init_twonode_without_gdb
 
 # Inside mininet console run 'EOF' to gracefully kill the mininet console
 orig_EOF = CLI.do_EOF
-
 
 # Kill mininet console
 def do_EOF(self, line):
