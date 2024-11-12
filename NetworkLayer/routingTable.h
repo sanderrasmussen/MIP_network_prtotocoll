@@ -18,4 +18,11 @@ struct routingTable{
     int route_count;
 };
 
+struct routingTable * create_routing_table() ;
+int add_or_update_route(struct routingTable *table, uint8_t dest, uint8_t next_hop, uint8_t cost) ;
+void print_routing_table(struct routingTable *table) ;
+void print_routing_table(struct routingTable *table) ;
+uint8_t get_best_route(struct routingTable *table , uint8_t ttl, uint8_t dst_mip);
+
+
 #endif //end guard

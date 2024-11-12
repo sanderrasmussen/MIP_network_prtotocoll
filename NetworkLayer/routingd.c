@@ -18,11 +18,50 @@
 #include "../Application_layer/unix_socket.h"
 #include "../Link_layer/raw_socket.h"
 #include "cache.h"
+#include "routingTable.h"
+#include "routingd.h"
 
 
 #define HELLO_INTERVAL 10      // HELLO-melding hvert 10. sekund
 #define UPDATE_INTERVAL 30     // UPDATE-melding hvert 30. sekund
 #define MAX_EVENTS 10          // Maks antall events vi kan håndtere samtidig
+
+struct RoutingRequest *deserialize_request(char * payload){
+    struct RoutingRequest * req = malloc(sizeof(struct RoutingRequest));
+    req->src_mip_addr = payload[0];
+    req->ttl = payload[1];
+    req->r = payload[2];
+    req->e = payload[3];
+    req->q = payload[4];
+    req->dest_mip_addr = payload[5];
+
+    return req;
+
+}
+
+// Initialize a RoutingResponse
+struct RoutingResponse create_routing_response(uint8_t src_addr, uint8_t next_hop_addr) {
+    struct RoutingResponse response;
+    response.src_mip_addr = src_addr;
+    response.ttl = 0;
+    response.r = 0x52;  // 'R'
+    response.s = 0x53;  // 'S'
+    response.p = 0x50;  // 'P'
+    response.next_hop_mip_addr = next_hop_addr;
+    return response;
+}
+
+// Initialize a RoutingRequest
+struct RoutingRequest create_routing_request(uint8_t src_addr, uint8_t dest_addr) {
+    struct RoutingRequest request;
+    request.src_mip_addr = src_addr;
+    request.ttl = 0;
+    request.r = 0x52;  // 'R'
+    request.e = 0x45;  // 'E'
+    request.q = 0x51;  // 'Q'
+    request.dest_mip_addr = dest_addr;
+    return request;
+}
 
 // Funksjon for å sende en HELLO-melding
 void send_hello_message(char *socket_path) {
@@ -83,21 +122,33 @@ int setup_periodic_timer(int interval) {
 }
 
 // Funksjon for å håndtere innkommende forespørsler
-void handle_request(int unix_socket) {
+void handle_request(int unix_socket, struct routingTable *routingTable) {
     printf("Handling incoming request...\n");
     // Implementer logikken for behandling av forespørsler her
-    struct mip_client_payload mip_payload;
-    //char *payload = malloc(strlen("UPDATE")+ sizeof(uint8_t));//TEMP ONLY HELLE MESSAGE SUPPORT, ALSO NEEDS UPDATE ADVERTISINGS 
-    //unixSocket_recieve(unix_socket,&mip_payload);
-    //if (strncmp(&mip_payload, "HELLO", 5) == 0){
-    //    printf(" ======discovered new host %s ====== \n", &mip_payload+5);
-    //}
+    char *payload = malloc(100);
+
+    read(unix_socket, payload,strlen("UPDATE")+sizeof(uint8_t));
+    if (strncmp(payload, "HELLO", 5) == 0){
+        uint8_t mip_addr = *(uint8_t *)(payload + 5);
+        printf("====== discovered new host %d ====== \n", mip_addr);
+        add_or_update_route(routingTable,mip_addr,mip_addr,1);
+
+    }
+    else if (strncmp(payload, "UPDATE", 6) == 0){
+        printf("ipdate \n");
+    }
+    //if request 
+    else if (payload[2]==R && payload[3] == E && payload[4]== Q){
+        // we need to make sure cost of route is equal or smaller than ttl
+        struct RoutingRequest *request = deserialize_request(payload);
+
+    }
     
 }
 
 
 // Funksjon for å håndtere epoll-hendelser
-void handle_router_events(int epoll_fd, int unix_socket, int hello_timer_fd, int update_timer_fd, char * socket_path, char *mipd_socket_path, struct sockaddr_un *address) {
+void handle_router_events(int epoll_fd, int unix_socket, int hello_timer_fd, int update_timer_fd, char * socket_path, char *mipd_socket_path, struct sockaddr_un *address, struct routingTable *routingTable) {
     struct epoll_event events[MAX_EVENTS];
     while (1) {
         int num_events = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
@@ -114,7 +165,7 @@ void handle_router_events(int epoll_fd, int unix_socket, int hello_timer_fd, int
                     continue;
                 }
                 printf("New client connected\n");
-                handle_request(client_fd);
+                handle_request(client_fd, routingTable);
                 close(client_fd);
             } else if (events[i].data.fd == hello_timer_fd) {
                 // Timer for HELLO utløpt - send HELLO-melding
@@ -193,11 +244,13 @@ int main(int argc, char *argv[]) {
         close(update_timer_fd);
         exit(EXIT_FAILURE);
     }
+    //init routing table 
+    struct routingTable * routingTable = create_routing_table();
     //on startup we will send a hello message
     send_hello_message(mipd_socket_path);
 
     // Kjør hovedløkken for å håndtere hendelser
-    handle_router_events(epoll_fd, unix_socket, hello_timer_fd, update_timer_fd, socket_path ,mipd_socket_path,&address);
+    handle_router_events(epoll_fd, unix_socket, hello_timer_fd, update_timer_fd, socket_path ,mipd_socket_path,&address, routingTable);
     // Lukk socket og tidtakere når vi er ferdige
     close(unix_socket);
     close(hello_timer_fd);
@@ -205,3 +258,4 @@ int main(int argc, char *argv[]) {
 
     return 0;
 }
+

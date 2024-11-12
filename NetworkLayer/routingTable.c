@@ -6,13 +6,16 @@
 
 
 // Funksjon for å opprette en tom rutetabell
-void create_routing_table(struct routingTable *table) {
+struct routingTable * create_routing_table() {
+    struct routingTable *table = malloc(sizeof(struct routingTable));
     table->route_count = 0;
     for (int i = 0; i < MAX_ROUTES; i++) {
         table->routes[i].dest = 255;    // Setter 255 som en verdi for "ikke-brukte" ruter
         table->routes[i].cost = INFINITY;
     }
+    return table;
 }
+
 
 // Funksjon for å legge til eller oppdatere en rute i rutetabellen
 int add_or_update_route(struct routingTable *table, uint8_t dest, uint8_t next_hop, uint8_t cost) {
@@ -53,7 +56,17 @@ int remove_route(struct routingTable *table, uint8_t dest) {
     }
     return 0;  // Returnerer 0 hvis ruten ikke finnes
 }
-
+//searches table for suitable routes and returns mip address of next hop if found suitable route to dst. On failure returns -1
+uint8_t get_best_route(struct routingTable *table , uint8_t ttl, uint8_t dst_mip){
+    //simply loop and find route entry to destination
+    for (int i = 0; i < table->route_count; i++){
+        if (table->routes[i].dest == dst_mip && table->routes[i].cost <= ttl){
+            return table->routes[i].dest;//returning mip address
+        }
+    }
+    return -1; //no suitable route found
+    
+}
 // Funksjon for å skrive ut rutetabellen for debugging
 void print_routing_table(struct routingTable *table) {
     printf("Routing Table:\n");

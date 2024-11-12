@@ -3,3 +3,7 @@ Padding er feil paa unix socket. Dette maa fikses
 IKKE SEND STRUCT MIP_PDU, GJOR DEN TIL EN BUFFER OG SEND BUFFER
 
 MIPD MAA LYTTE PAA ALLE INTERFACES
+
+EKSAMEN DEL 2
+
+RAW SOCKET FUNKSJONER MAA ENDRES: send raw packet skal sende til neste hopp i ruting veien og decrementere ttl

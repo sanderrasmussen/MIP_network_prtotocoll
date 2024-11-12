@@ -12,6 +12,7 @@
         "string_view": "c",
         "epoll.h": "c",
         "cstdint": "c",
-        "string.h": "c"
+        "string.h": "c",
+        "routingtable.h": "c"
     }
 }

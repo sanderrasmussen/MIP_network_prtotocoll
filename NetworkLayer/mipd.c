@@ -24,6 +24,7 @@
 #include "../Application_layer/unix_socket.h"
 #include "../Link_layer/raw_socket.h"
 #include "cache.h"
+#include "routingd.h"//i still need this in order to get the create router request struct. mipd already contains too much code as is.
 
 /*Notes: this application was developed with the intention of only having one active client and server at a time on each mipd. 
 The intetion is that a client should be started only when there is no active. This has not been implemented here. 
@@ -34,8 +35,34 @@ This will in the testingscript only affect the clients getting the PONGs.
 Another note. The buffers are not properly managed yet, hopefully i can fix this within the delivery of home exam 2.
 I tested this on nrec and it should work.*/
 
-int forward_packet(){
+int forward_engine(){
     return 0;
+}
+char * serialize_router_requests(struct RoutingRequest request){
+    char *buffer= malloc(sizeof(struct RoutingRequest));
+    buffer[0]= request.src_mip_addr;
+    buffer[1]= request.ttl;
+    buffer[2] =request.r;
+    buffer[3] = request.e;
+    buffer[4] = request.q;
+    buffer[5] = request.dest_mip_addr;
+    return buffer;
+}
+
+struct RoutingResponse send_to_router_and_receive_response(char *sock_path, char* payload){
+    //todo add timeout to waiting for response
+    char *routerPath = malloc(strlen(sock_path) + strlen("_routingd") + 1); // +1 for null terminator
+    strcpy(routerPath,sock_path);
+    strcat(routerPath, "_routingd");
+    struct sockaddr_un *addr=malloc(sizeof(struct sockaddr_un));
+    int sock= setupUnixSocket(sock_path, addr);
+    unixSocket_bind(sock,routerPath,addr);
+    unixSocket_send_String(sock,payload,strlen(payload));
+    //wait for response, have a timeout if none received
+    //todo, add timeout
+    char * buffer = malloc(sizeof(struct RoutingResponse));
+    read(sock,buffer, sizeof(struct RoutingResponse));
+    close(sock);
 }
 
 //function for serializing pdu to be sent over raw sockets
@@ -347,60 +374,58 @@ int handle_router_package(struct mip_pdu *pdu ,int raw, uint8_t *src_mac, char* 
     printf("handling router package\n");
     //check if Hello or update
 
+    if (strncmp(pdu->sdu.message_payload, "HELLO", 5) == 0) {
+        // Received a HELLO message, forwarding to routing daemon
+        printf("received hello package\n");
+        // Create the path for the routing daemon socket
+        char *routerPath = malloc(strlen(sock_path) + strlen("_routingd") + 1); // +1 for null terminator
+        if (!routerPath) {
+            perror("malloc failed for routerPath");
+            return -1; // Handle error
+        }
+        strcpy(routerPath, sock_path);
+        strcat(routerPath, "_routingd");
+        struct sockaddr_un *address = malloc(sizeof(struct sockaddr_un));
+        if (!address) {
+            perror("malloc failed for address");
+            free(routerPath);
+            return -1;
+        }
+        // Set up connection to the routing daemon
+        int router_sock = setupUnixSocket(routerPath, address);
+        int status = unixSocket_connect(router_sock, routerPath, address);
+        if (status == -1) {
+            perror("connect to router");
+            free(routerPath);
+            free(address);
+            close(router_sock);
+            return -1;
+        }
+        // Prepare payload, including the source address of the MIP node
+        char *payload = malloc(strlen("HELLO") + 1 + sizeof(uint8_t)); // "HELLO" + 1 null byte + src_addr
+        if (!payload) {
+            perror("malloc failed for payload");
+            free(routerPath);
+            free(address);
+            close(router_sock);
+            return -1;
+        }
+        strcpy(payload, "HELLO");
+        // Use a temporary variable for src_addr since it’s a bit-field
+        uint8_t src_addr_value = pdu->mip_header.src_addr;
+        memcpy(payload + strlen("HELLO"), &src_addr_value, sizeof(uint8_t));
+        // Send payload to the routing daemon
+        status = unixSocket_send_String(router_sock, payload, strlen("HELLO") + sizeof(uint8_t));
+        if (status < 0) {
+            perror("unixSocket_send_String");
+        }
 
-    
-if (strncmp(pdu->sdu.message_payload, "HELLO", 5) == 0) {
-    // Received a HELLO message, forwarding to routing daemon
-    printf("received hello package\n");
-    // Create the path for the routing daemon socket
-    char *routerPath = malloc(strlen(sock_path) + strlen("_routingd") + 1); // +1 for null terminator
-    if (!routerPath) {
-        perror("malloc failed for routerPath");
-        return -1; // Handle error
-    }
-    strcpy(routerPath, sock_path);
-    strcat(routerPath, "_routingd");
-    struct sockaddr_un *address = malloc(sizeof(struct sockaddr_un));
-    if (!address) {
-        perror("malloc failed for address");
-        free(routerPath);
-        return -1;
-    }
-    // Set up connection to the routing daemon
-    int router_sock = setupUnixSocket(routerPath, address);
-    int status = unixSocket_connect(router_sock, routerPath, address);
-    if (status == -1) {
-        perror("connect to router");
+        // Cleanup
+        close(router_sock);
         free(routerPath);
         free(address);
-        close(router_sock);
-        return -1;
+        free(payload);
     }
-    // Prepare payload, including the source address of the MIP node
-    char *payload = malloc(strlen("HELLO") + 1 + sizeof(uint8_t)); // "HELLO" + 1 null byte + src_addr
-    if (!payload) {
-        perror("malloc failed for payload");
-        free(routerPath);
-        free(address);
-        close(router_sock);
-        return -1;
-    }
-    strcpy(payload, "HELLO");
-    // Use a temporary variable for src_addr since it’s a bit-field
-    uint8_t src_addr_value = pdu->mip_header.src_addr;
-    memcpy(payload + strlen("HELLO"), &src_addr_value, sizeof(uint8_t));
-    // Send payload to the routing daemon
-    status = unixSocket_send_String(router_sock, payload, strlen("HELLO") + sizeof(uint8_t));
-    if (status < 0) {
-        perror("unixSocket_send_String");
-    }
-
-    // Cleanup
-    close(router_sock);
-    free(routerPath);
-    free(address);
-    free(payload);
-}
 
     else if(strncmp(pdu->sdu.message_payload, "UPPDATE", 7) == 0){
         //uppdate routes
@@ -435,7 +460,7 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
 }
 
 // Main function for handling incoming unix domain socket connections
-int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, uint8_t self_mip_addr, struct ifs_data *ifs) {
+int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, uint8_t self_mip_addr, struct ifs_data *ifs, char * sock_path) {
 
     struct mip_client_payload *buffer = malloc(sizeof(struct mip_client_payload));
     char recv_buffer[1000];
@@ -478,6 +503,14 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
 
         printf("    -dst mip address: %d  \n", buffer->dst_mip_addr);
         printf("    -message: %s  \n", buffer->message);
+        //ask router for next hop to send the packet to 
+        struct RoutingRequest RoutingRequest = create_routing_request(self_mip_addr,buffer->dst_mip_addr );
+        //send to router and wait for response
+        char* payload = serialize_router_requests(RoutingRequest);
+        struct RoutingResponse response = send_to_router_and_receive_response(sock_path,payload);
+        //wait for response, if none then end 
+
+
 
         struct entry *cache_entry = get_mac_from_cache(cache, buffer->dst_mip_addr);
         if (cache_entry == NULL || cache_entry->mac_address == NULL || cache_entry->if_addr == NULL) {
@@ -501,6 +534,9 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
         } else {
             printf("MIP address found in cache, sending message\n");
             struct mip_pdu *pdu = create_mip_pdu(PING, REQUEST, buffer->dst_mip_addr, buffer->message, self_mip_addr,1);
+
+            //TODO REQUEST ROUTE FROM ROUTER AND SEND PACKAGE TO NEXT HOP. THEN NEXT HOP WILL FORWARD IT FURTHER
+            struct RoutingRequest RoutingRequest = create_routing_request(self_mip_addr,buffer->dst_mip_addr );
             send_raw_packet(raw_socket, pdu, cache_entry->mac_address, cache_entry->if_addr);
         }
 
@@ -549,7 +585,7 @@ void handle_events(int unix_socket, struct ifs_data *ifs, struct cache *cache, u
                     perror("accept");
                     continue;
                 }
-                serve_unix_connection(sock_accept, ifs->rsock[0], cache, self_mip_addr, ifs);
+                serve_unix_connection(sock_accept, ifs->rsock[0], cache, self_mip_addr, ifs, socketPath);
                 //close(sock_accept);
             } else {
                 // Håndtere hendelser på raw sockets

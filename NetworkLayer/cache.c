@@ -163,4 +163,5 @@ void clear_cache(struct cache *cache) {
 
     cache->head = NULL;
     cache->tail = NULL;
+    
 }
