@@ -4,10 +4,10 @@ RM      = rm -f
 
 default: all
 
-all: mipd ping_client ping_server routingd
+all: mipd ping_client ping_server routingd 
 
-mipd: mipd.o unix_socket.o raw_socket.o cache.o
-	$(CC) $(CFLAGS) -o mipd NetworkLayer/mipd.o Application_layer/unix_socket.o Link_layer/raw_socket.o NetworkLayer/cache.o
+mipd: mipd.o unix_socket.o raw_socket.o cache.o routingTable.o
+	$(CC) $(CFLAGS) -o mipd NetworkLayer/mipd.o Application_layer/unix_socket.o Link_layer/raw_socket.o NetworkLayer/cache.o NetworkLayer/routingTable.o
 
 mipd.o: NetworkLayer/mipd.c
 	$(CC) $(CFLAGS) -c NetworkLayer/mipd.c -o NetworkLayer/mipd.o
@@ -33,10 +33,14 @@ ping_server: ping_server.o unix_socket.o
 ping_server.o: ping_server.c
 	$(CC) $(CFLAGS) -c ping_server.c -o ping_server.o
 
-routingd : routingd.o unix_socket.o
-	$(CC) $(CFLAGS) -o routingd NetworkLayer/routingd.o Application_layer/unix_socket.o
+routingd : routingd.o unix_socket.o routingTable.o
+	$(CC) $(CFLAGS) -o routingd NetworkLayer/routingd.o Application_layer/unix_socket.o NetworkLayer/routingTable.o
+
 routingd.o: NetworkLayer/routingd.c
 	$(CC) $(CFLAGS) -c NetworkLayer/routingd.c -o NetworkLayer/routingd.o
+
+routingTable.o: NetworkLayer/routingTable.c 
+	$(CC) $(CFLAGS) -c NetworkLayer/routingTable.c -o NetworkLayer/routingTable.o
 
 clean:
 	$(RM) NetworkLayer/mipd.o Application_layer/unix_socket.o Link_layer/raw_socket.o mipd

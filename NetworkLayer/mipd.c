@@ -24,7 +24,7 @@
 #include "../Application_layer/unix_socket.h"
 #include "../Link_layer/raw_socket.h"
 #include "cache.h"
-#include "routingd.h"//i still need this in order to get the create router request struct. mipd already contains too much code as is.
+#include "routingTable.h"//i still need this in order to get the create router request struct. mipd already contains too much code as is.
 
 /*Notes: this application was developed with the intention of only having one active client and server at a time on each mipd. 
 The intetion is that a client should be started only when there is no active. This has not been implemented here. 
@@ -38,31 +38,23 @@ I tested this on nrec and it should work.*/
 int forward_engine(){
     return 0;
 }
-char * serialize_router_requests(struct RoutingRequest request){
-    char *buffer= malloc(sizeof(struct RoutingRequest));
-    buffer[0]= request.src_mip_addr;
-    buffer[1]= request.ttl;
-    buffer[2] =request.r;
-    buffer[3] = request.e;
-    buffer[4] = request.q;
-    buffer[5] = request.dest_mip_addr;
-    return buffer;
-}
 
-struct RoutingResponse send_to_router_and_receive_response(char *sock_path, char* payload){
+struct RoutingResponse *send_to_router_and_receive_response(char *sock_path, char* payload){
     //todo add timeout to waiting for response
     char *routerPath = malloc(strlen(sock_path) + strlen("_routingd") + 1); // +1 for null terminator
     strcpy(routerPath,sock_path);
     strcat(routerPath, "_routingd");
     struct sockaddr_un *addr=malloc(sizeof(struct sockaddr_un));
     int sock= setupUnixSocket(sock_path, addr);
-    unixSocket_bind(sock,routerPath,addr);
-    unixSocket_send_String(sock,payload,strlen(payload));
+    unixSocket_connect(sock,routerPath,addr);
+    write(sock,payload,strlen(payload));
     //wait for response, have a timeout if none received
     //todo, add timeout
-    char * buffer = malloc(sizeof(struct RoutingResponse));
-    read(sock,buffer, sizeof(struct RoutingResponse));
+    char *response_serialized = malloc(sizeof(struct RoutingResponse));
+    read(sock,response_serialized,sizeof(struct RoutingResponse));
+    struct RoutingResponse * response_deserialized = deserialize_response(response_serialized);
     close(sock);
+    return response_deserialized;
 }
 
 //function for serializing pdu to be sent over raw sockets
@@ -236,12 +228,14 @@ int handle_arp(struct mip_pdu *mip_pdu, uint8_t *src_mac, struct cache *cache, u
 
             // Fetch queued PDUs for this MIP address and send them
             struct mip_pdu *unsent_pdu;
-            while ((unsent_pdu = fetch_queued_pdu_in_cache(cache, mip_pdu->mip_header.src_addr)) != NULL) {
+            while ((unsent_pdu = fetch_queued_pdu_in_cache(cache, mip_pdu->mip_header.src_addr)) != NULL) {// we need to query router and send to necxt hop
+
                 printf(" Unsent pdu message: %s \n", unsent_pdu->sdu.message_payload);
                 if (unsent_pdu->mip_header.sdu_type != PING) {
                     perror("unsent pdu not ping pdu");
                     return -1;
                 }
+
                 send_raw_packet(raw_socket, unsent_pdu, src_mac_addr, socket_name);
                 printf(" Unsent pdu that was on hold is now sent \n");
                 free(unsent_pdu->sdu.message_payload); 
@@ -361,7 +355,7 @@ int handle_ping(struct mip_pdu *mip_pdu, uint8_t *src_mac, struct cache *cache, 
             printf(" \n ================================= \n");
 
             // Free dynamically allocated memory
-            free(buffer_to_server);
+            free(buffer_to_server); 
             free(recv_buff);
             free(pong_pdu->sdu.message_payload);
             free(pong_pdu);
@@ -454,7 +448,7 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
     else if (mip_pdu->mip_header.sdu_type == ROUTER){
         printf("received router package \n");
         handle_router_package(mip_pdu,raw_socket,src_mac_addr, socketPath );
-
+        
     }
     return 1;
 }
@@ -504,20 +498,26 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
         printf("    -dst mip address: %d  \n", buffer->dst_mip_addr);
         printf("    -message: %s  \n", buffer->message);
         //ask router for next hop to send the packet to 
-        struct RoutingRequest RoutingRequest = create_routing_request(self_mip_addr,buffer->dst_mip_addr );
+        struct RoutingRequest RoutingRequest = create_routing_request(self_mip_addr,buffer->dst_mip_addr, 15 );
         //send to router and wait for response
         char* payload = serialize_router_requests(RoutingRequest);
-        struct RoutingResponse response = send_to_router_and_receive_response(sock_path,payload);
         //wait for response, if none then end 
+        struct RoutingResponse *response = send_to_router_and_receive_response(sock_path,payload);
+        //TODO IMPLEMENT TIMEOUT IN SEND TO ROUTER AND RECEIVE RESPONSE, IF TIMED OUT RETURN -1, 
+
+        //we have the response, get the next hop and send package to next hop, hopefully the next host will forward the package further
+        uint8_t next_hop = response->next_hop_mip_addr;
+        printf("///////////////// NEXT HOP ADDR: %d \n",next_hop);
 
 
+        struct entry *cache_entry = get_mac_from_cache(cache, next_hop);// we will get the mac of next host and send it 
 
-        struct entry *cache_entry = get_mac_from_cache(cache, buffer->dst_mip_addr);
         if (cache_entry == NULL || cache_entry->mac_address == NULL || cache_entry->if_addr == NULL) {
             // ARP BROADCAST
             printf("MIP address not found in cache, sending ARP request \n");
-            struct mip_pdu *ping_pdu_to_store = create_mip_pdu(PING, REQUEST, buffer->dst_mip_addr, buffer->message, self_mip_addr,1);
-            struct mip_pdu *pdu = create_mip_pdu(MIP_ARP, REQUEST, buffer->dst_mip_addr, buffer->message, self_mip_addr,1);
+            struct mip_pdu *ping_pdu_to_store = create_mip_pdu(PING, REQUEST, buffer->dst_mip_addr, buffer->message, self_mip_addr,15);
+            struct mip_pdu *pdu = create_mip_pdu(MIP_ARP, REQUEST, next_hop, buffer->message, self_mip_addr,1);//requesting next hop, should be neibouhr so ttl is 1
+
             uint8_t broadcast_addr[] = BROADCAST_ADDRESS;
 
             // Send ARP over all interfaces
@@ -536,8 +536,9 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
             struct mip_pdu *pdu = create_mip_pdu(PING, REQUEST, buffer->dst_mip_addr, buffer->message, self_mip_addr,1);
 
             //TODO REQUEST ROUTE FROM ROUTER AND SEND PACKAGE TO NEXT HOP. THEN NEXT HOP WILL FORWARD IT FURTHER
-            struct RoutingRequest RoutingRequest = create_routing_request(self_mip_addr,buffer->dst_mip_addr );
-            send_raw_packet(raw_socket, pdu, cache_entry->mac_address, cache_entry->if_addr);
+ 
+            send_raw_packet(raw_socket, pdu, cache_entry->mac_address, cache_entry->if_addr);//sending raw paclet to next hop
+
         }
 
         free(buffer->message);

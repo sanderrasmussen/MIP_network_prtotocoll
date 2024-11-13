@@ -118,6 +118,53 @@ def init_twonode_without_gdb(self, line):
     # Give time for routing daemons to converge
     time.sleep(15)
 
+def init_twonode_with_client_and_gdb(self, line):
+    "Initialize both nodes with gdb and start client on A"
+    net = self.mn
+    A = net.get('A')
+    B = net.get('B')
+
+    # Start MIP Daemon on Node A and Node B with gdb
+    terms.append(openTerm(self,
+                          node=A,
+                          title="MIP A (gdb)",
+                          geometry="80x14+0+0",
+                          cmd="gdb --args ./mipd -d usockA 10"))
+
+    terms.append(openTerm(self,
+                          node=B,
+                          title="MIP B (gdb)",
+                          geometry="80x14+0+450",
+                          cmd="gdb --args ./mipd -d usockB 20"))
+
+    # Sleep for 3 sec to ensure that the MIP daemons are ready
+    time.sleep(3)
+
+    # Start Routing Daemon on Node A and Node B with gdb
+    terms.append(openTerm(self,
+                          node=A,
+                          title="ROUTING A (gdb)",
+                          geometry="80x14+0+210",
+                          cmd="gdb --args ./routingd -d usockA"))
+
+    terms.append(openTerm(self,
+                          node=B,
+                          title="ROUTING B (gdb)",
+                          geometry="80x14+0+660",
+                          cmd="gdb --args ./routingd -d usockB"))
+
+    # Give time for routing daemons to converge
+    time.sleep(15)
+
+    # Start client on Node A with gdb
+    terms.append(openTerm(self,
+                          node=A,
+                          title="Client [A] (gdb)",
+                          geometry="80x14+0+900",
+                          cmd="gdb --args ./ping_client usockA 20 \"Hello from A\""))
+
+
+
 
 def init_twonode_with_client(self, line):
     "Initialize both nodes without gdb and start client on A"
@@ -171,6 +218,7 @@ def init_twonode_with_client(self, line):
 CLI.do_init_twonode_with_gdb = init_twonode_with_gdb
 CLI.do_init_twonode_without_gdb = init_twonode_without_gdb
 CLI.do_init_twonode_with_client = init_twonode_with_client
+CLI.do_init_twonode_with_client_and_gdb = init_twonode_with_client_and_gdb
 
 # Inside mininet console run 'EOF' to gracefully kill the mininet console
 orig_EOF = CLI.do_EOF

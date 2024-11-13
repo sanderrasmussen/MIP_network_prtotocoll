@@ -26,42 +26,16 @@
 #define UPDATE_INTERVAL 30     // UPDATE-melding hvert 30. sekund
 #define MAX_EVENTS 10          // Maks antall events vi kan håndtere samtidig
 
-struct RoutingRequest *deserialize_request(char * payload){
-    struct RoutingRequest * req = malloc(sizeof(struct RoutingRequest));
-    req->src_mip_addr = payload[0];
-    req->ttl = payload[1];
-    req->r = payload[2];
-    req->e = payload[3];
-    req->q = payload[4];
-    req->dest_mip_addr = payload[5];
 
-    return req;
-
+int send_to_mipd(char * payload, char *mipd_path){
+    struct sockaddr_un *addr = malloc(sizeof(struct sockaddr_un));
+    int sock = setupUnixSocket(mipd_path, addr);
+    unixSocket_connect(sock,mipd_path, addr);
+    unixSocket_send_String(sock,payload,strlen(payload));
+    close(sock);
+    free(addr);
 }
 
-// Initialize a RoutingResponse
-struct RoutingResponse create_routing_response(uint8_t src_addr, uint8_t next_hop_addr) {
-    struct RoutingResponse response;
-    response.src_mip_addr = src_addr;
-    response.ttl = 0;
-    response.r = 0x52;  // 'R'
-    response.s = 0x53;  // 'S'
-    response.p = 0x50;  // 'P'
-    response.next_hop_mip_addr = next_hop_addr;
-    return response;
-}
-
-// Initialize a RoutingRequest
-struct RoutingRequest create_routing_request(uint8_t src_addr, uint8_t dest_addr) {
-    struct RoutingRequest request;
-    request.src_mip_addr = src_addr;
-    request.ttl = 0;
-    request.r = 0x52;  // 'R'
-    request.e = 0x45;  // 'E'
-    request.q = 0x51;  // 'Q'
-    request.dest_mip_addr = dest_addr;
-    return request;
-}
 
 // Funksjon for å sende en HELLO-melding
 void send_hello_message(char *socket_path) {
@@ -122,7 +96,7 @@ int setup_periodic_timer(int interval) {
 }
 
 // Funksjon for å håndtere innkommende forespørsler
-void handle_request(int unix_socket, struct routingTable *routingTable) {
+void handle_request(int unix_socket, struct routingTable *routingTable, char *mipd_path) {
     printf("Handling incoming request...\n");
     // Implementer logikken for behandling av forespørsler her
     char *payload = malloc(100);
@@ -132,17 +106,29 @@ void handle_request(int unix_socket, struct routingTable *routingTable) {
         uint8_t mip_addr = *(uint8_t *)(payload + 5);
         printf("====== discovered new host %d ====== \n", mip_addr);
         add_or_update_route(routingTable,mip_addr,mip_addr,1);
-
+        printf("///// added %d to table \n", mip_addr);
+        print_routing_table(routingTable);
     }
     else if (strncmp(payload, "UPDATE", 6) == 0){
         printf("ipdate \n");
+        //TODO IMPLEMENT UPDATE FUNCTIONALITY
     }
     //if request 
     else if (payload[2]==R && payload[3] == E && payload[4]== Q){
         // we need to make sure cost of route is equal or smaller than ttl
         struct RoutingRequest *request = deserialize_request(payload);
-
-    }
+        //find route
+        printf("SEARCHING FOR ADDR %d \n", request->dest_mip_addr);
+        uint8_t next_hop = get_next_hop(routingTable,request->ttl,request->dest_mip_addr);
+        printf("NEXT HOP FOUND : %d\n", next_hop);
+        // make response containign next hop.
+        struct RoutingResponse response = create_routing_response(request->src_mip_addr,next_hop,1);
+        char * serialized_response = serialize_response(response);
+        printf("serialized dst %d \n", serialized_response[5]);
+        //send response back to mipd
+        send_to_mipd(serialize_response, mipd_path);
+        printf("RESPONSE SENT TO MIPD \n");
+    }   
     
 }
 
@@ -165,7 +151,7 @@ void handle_router_events(int epoll_fd, int unix_socket, int hello_timer_fd, int
                     continue;
                 }
                 printf("New client connected\n");
-                handle_request(client_fd, routingTable);
+                handle_request(client_fd, routingTable,mipd_socket_path);
                 close(client_fd);
             } else if (events[i].data.fd == hello_timer_fd) {
                 // Timer for HELLO utløpt - send HELLO-melding

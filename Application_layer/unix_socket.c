@@ -54,7 +54,7 @@ int unixSocket_bind(int unix_sockfd, char *pathToSocket, struct sockaddr_un *add
         close(unix_sockfd);
         umask(mask);
 
-        exit(EXIT_FAILURE);
+       //exit(EXIT_FAILURE);
     };
     umask(mask);
     return unix_data_socket;
