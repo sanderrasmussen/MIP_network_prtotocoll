@@ -54,6 +54,8 @@ struct RoutingResponse *send_to_router_and_receive_response(char *sock_path, cha
     read(sock,response_serialized,sizeof(struct RoutingResponse));
     struct RoutingResponse * response_deserialized = deserialize_response(response_serialized);
     close(sock);
+    free(routerPath);
+    free(addr);
     return response_deserialized;
 }
 
