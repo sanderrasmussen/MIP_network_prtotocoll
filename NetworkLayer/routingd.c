@@ -126,7 +126,7 @@ void handle_request(int unix_socket, struct routingTable *routingTable, char *mi
         char * serialized_response = serialize_response(response);
         printf("serialized dst %d \n", serialized_response[5]);
         //send response back to mipd
-        write(unix_socket,serialize_response, sizeof(struct RoutingResponse));
+        write(unix_socket,serialized_response, sizeof(struct RoutingResponse));
         //send_to_mipd(serialize_response, mipd_path);
         printf("RESPONSE SENT TO MIPD \n");
     }   

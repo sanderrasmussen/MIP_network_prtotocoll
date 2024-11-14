@@ -139,7 +139,7 @@ struct mip_pdu* create_mip_pdu( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_
         }
         header->dest_addr = dst_mip_addr;
         header->src_addr = src_address;
-        header->ttl= 1; //recommended to set to one according to exam text, not yet decreased when reaching hosts
+        header->ttl= ttl; //recommended to set to one according to exam text, not yet decreased when reaching hosts
         header->sdu_type= sdu_type; //can be ping or arp, in this case it is arp
         header->sdu_len = sizeof(uint32_t);
          /*if it is arp, then we know that the sdu len is only 32 bit because the payload is:
@@ -342,7 +342,7 @@ int handle_ping(struct mip_pdu *mip_pdu, uint8_t *src_mac, struct cache *cache, 
             uint8_t dst_mac_addr[6];
             memcpy(dst_mac_addr, src_mac_addr, 6);
 
-            struct mip_pdu *pong_pdu = create_mip_pdu(PING, NULL, dst_mip_addr, recv_buff + 1, self_mip_addr,1);
+            struct mip_pdu *pong_pdu = create_mip_pdu(PING, NULL, dst_mip_addr, recv_buff + 1, self_mip_addr,15);
             status = send_raw_packet(raw_socket, pong_pdu, dst_mac_addr, socket_name);
             if (status < 0) {
                 perror("send pong message failed");
@@ -518,7 +518,7 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
             // ARP BROADCAST
             printf("MIP address not found in cache, sending ARP request \n");
             struct mip_pdu *ping_pdu_to_store = create_mip_pdu(PING, REQUEST, buffer->dst_mip_addr, buffer->message, self_mip_addr,15);
-            struct mip_pdu *pdu = create_mip_pdu(MIP_ARP, REQUEST, next_hop, buffer->message, self_mip_addr,1);//requesting next hop, should be neibouhr so ttl is 1
+            struct mip_pdu *pdu = create_mip_pdu(MIP_ARP, REQUEST, next_hop, buffer->message, self_mip_addr,4);//requesting next hop, should be neibouhr so ttl is 1
 
             uint8_t broadcast_addr[] = BROADCAST_ADDRESS;
 
@@ -535,7 +535,7 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
 
         } else {
             printf("MIP address found in cache, sending message\n");
-            struct mip_pdu *pdu = create_mip_pdu(PING, REQUEST, buffer->dst_mip_addr, buffer->message, self_mip_addr,1);
+            struct mip_pdu *pdu = create_mip_pdu(PING, REQUEST, buffer->dst_mip_addr, buffer->message, self_mip_addr,15);
 
             //TODO REQUEST ROUTE FROM ROUTER AND SEND PACKAGE TO NEXT HOP. THEN NEXT HOP WILL FORWARD IT FURTHER
  

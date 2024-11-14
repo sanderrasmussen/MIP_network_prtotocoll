@@ -188,11 +188,11 @@ int send_raw_packet(int raw_socket, struct mip_pdu *mip_pdu, uint8_t *dst_mac_ad
     struct iovec ioVector[2];
     int status;
     //decrement mip_pdu TTL and dont send if ttl=0
-    if(mip_pdu->mip_header.ttl--<=0){ //decrement ttl
+    if(mip_pdu->mip_header.ttl<=0){ //decrement ttl
         printf("====COULD NOT FORWARD PACKET, TTL REACHED 0 \n");
         return -1;
     }
-
+    mip_pdu->mip_header.ttl--;
     // Serialiser PDU-en
     char *serilzd_pdu = malloc(100); // Temp hardkodet buffer
     serialize_pdu(mip_pdu, serilzd_pdu);
