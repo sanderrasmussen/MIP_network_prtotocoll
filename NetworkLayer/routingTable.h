@@ -41,7 +41,16 @@ struct RoutingResponse {
     uint8_t p;                 // 'P' (0x50)
     uint8_t next_hop_mip_addr; // Next hop MIP address (255 if no route)
 };
+struct update_message {
+    uint8_t route_count;
+    struct update_entry *routes;
+   
 
+};
+struct update_entry{
+    uint8_t dest_mip_addr;
+    uint8_t cost;
+};
 struct routingTable * create_routing_table() ;
 int add_or_update_route(struct routingTable *table, uint8_t dest, uint8_t next_hop, uint8_t cost) ;
 void print_routing_table(struct routingTable *table) ;
@@ -58,6 +67,10 @@ struct RoutingRequest create_routing_request(uint8_t src_addr, uint8_t dest_addr
 // Initialize a RoutingResponse
 struct RoutingResponse create_routing_response(uint8_t src_addr, uint8_t next_hop, uint8_t ttl) ;
 char * serialize_router_requests(struct RoutingRequest request);
+char * serialize_update_message(struct update_message* update_message) ;
+
+//fetches all routes and costs in table and creates a update_message struct and returns it
+struct update_message * create_update_message(struct routingTable *table) ;
 
 
 #endif //end guard

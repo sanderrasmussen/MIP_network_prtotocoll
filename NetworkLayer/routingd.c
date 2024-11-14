@@ -164,13 +164,31 @@ void handle_router_events(int epoll_fd, int unix_socket, int hello_timer_fd, int
                 // Timer for UPDATE utløpt - send UPDATE-melding
                 uint64_t expirations;
                 read(update_timer_fd, &expirations, sizeof(expirations)); // Tømmer timeren
-                send_update_message(mipd_socket_path);
+                advertise_routes(routingTable, mipd_socket_path);
+                //send_update_message(mipd_socket_path);
 
             }
         }
     }
 }
+int advertise_routes(struct routingTable * routingTable, char *socket_path){
+    //map routes and create message
+    struct update_message *update_msg = create_update_message(routingTable);
+    //serialize and send to mipd
+    char * serialized_update_msg=serialize_update_message(update_msg);
+    //send to mips
+    struct sockaddr_un address;
+    printf("Sending UPDATE message...\n");
+    int mipd_unix_socket = setupUnixSocket(socket_path, &address);
+    int status = unixSocket_connect(mipd_unix_socket, socket_path, &address);
+    if (status == -1){
+        perror("connect client");
+    }
+    unixSocket_send_String(mipd_unix_socket, serialized_update_msg, strlen(serialized_update_msg));
+    close(mipd_unix_socket);
+    printf("UPPDATE message sent \n");
 
+}
 int main(int argc, char *argv[]) {
 
     if (argc != 3 ) {
@@ -242,7 +260,7 @@ int main(int argc, char *argv[]) {
     close(unix_socket);
     close(hello_timer_fd);
     close(update_timer_fd);
-
+    
     return 0;
 }
 
