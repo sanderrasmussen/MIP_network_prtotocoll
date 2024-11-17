@@ -13,6 +13,7 @@
         "epoll.h": "c",
         "cstdint": "c",
         "string.h": "c",
-        "routingtable.h": "c"
+        "routingtable.h": "c",
+        "system_error": "c"
     }
 }

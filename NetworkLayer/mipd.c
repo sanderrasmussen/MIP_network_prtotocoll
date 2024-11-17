@@ -34,24 +34,6 @@ This will in the testingscript only affect the clients getting the PONGs.
 
 Another note. The buffers are not properly managed yet, hopefully i can fix this within the delivery of home exam 2.
 I tested this on nrec and it should work.*/
-
-int forward_engine(){
-    return 0;
-}
-int send_to_router(char* sock_path, char* payload){
-        //todo add timeout to waiting for response
-    char *routerPath = malloc(strlen(sock_path) + strlen("_routingd") + 1); // +1 for null terminator
-    strcpy(routerPath,sock_path);
-    strcat(routerPath, "_routingd");
-    struct sockaddr_un *addr=malloc(sizeof(struct sockaddr_un));
-    int sock= setupUnixSocket(sock_path, addr);
-    unixSocket_connect(sock,routerPath,addr);
-    write(sock,payload,strlen(payload));
-    close(sock);
-    free(routerPath);
-    free(addr);
-    return 1;
-}
 struct RoutingResponse *send_to_router_and_receive_response(char *sock_path, char* payload){
     //todo add timeout to waiting for response
     char *routerPath = malloc(strlen(sock_path) + strlen("_routingd") + 1); // +1 for null terminator
@@ -70,68 +52,6 @@ struct RoutingResponse *send_to_router_and_receive_response(char *sock_path, cha
     free(routerPath);
     free(addr);
     return response_deserialized;
-}
-
-//function for serializing pdu to be sent over raw sockets
-size_t serialize_pdu(struct mip_pdu *mip_pdu, char* buffer){
-
-    size_t offset = 0;
-    // Serialize the mip_header
-    buffer[offset++] = mip_pdu->mip_header.dest_addr;  // 1 byte for dest_addr
-    buffer[offset++] = mip_pdu->mip_header.src_addr;   // 1 byte for src_addr
-
-    // Doing micro management of bits
-    // Pack ttl (4 bits), sdu_len (9 bits), and sdu_type (3 bits) into 3 bytes
-    uint16_t ttl_sdu_len = (mip_pdu->mip_header.ttl << 12) |
-                           (mip_pdu->mip_header.sdu_len & 0x1FF);  // Pack ttl and sdu_len
-
-    buffer[offset++] = (ttl_sdu_len >> 8) & 0xFF;  // High byte of ttl_sdu_len
-    buffer[offset++] = ttl_sdu_len & 0xFF;         // Low byte of ttl_sdu_len
-    buffer[offset++] = (mip_pdu->mip_header.sdu_type & 0x07);  // 3 bits for sdu_type
-
-    // Now serialize the sdu 
-    if (mip_pdu->mip_header.sdu_type == MIP_ARP) {
-        // serialize ARP message
-        memcpy(buffer + offset, mip_pdu->sdu.arp_msg_payload, ARP_SDU_SIZE);
-        offset += ARP_SDU_SIZE;
-    } else  {
-        // Serialize regular message payload
-        memcpy(buffer + offset, mip_pdu->sdu.message_payload, mip_pdu->mip_header.sdu_len);
-        offset += mip_pdu->mip_header.sdu_len;
-    }
-
-    return offset;  // Return the total number of bytes serialized into the buffer
-}
-//function for deserializing pdu to be sent over raw sockets
-struct mip_pdu* deserialize_pdu(char* buffer, size_t length) {
-    struct mip_pdu* mip_pdu = (struct mip_pdu*)malloc(sizeof(struct mip_pdu));
-    size_t offset = 0;
-
-    // Deserialize the mip_header
-    mip_pdu->mip_header.dest_addr = buffer[offset++];   // 1 byte for dest_addr
-    mip_pdu->mip_header.src_addr = buffer[offset++];    // 1 byte for src_addr
-
-    // Extract ttl (4 bits), sdu_len (9 bits), and sdu_type (3 bits)
-    uint16_t ttl_sdu_len = (buffer[offset] << 8) | buffer[offset + 1];
-    mip_pdu->mip_header.ttl = (ttl_sdu_len >> 12) & 0x0F;  // 4 bits for TTL
-    mip_pdu->mip_header.sdu_len = ttl_sdu_len & 0x1FF;     // 9 bits for sdu_len
-    mip_pdu->mip_header.sdu_type = buffer[offset + 2] & 0x07;  // 3 bits for sdu_type
-    offset += 3;  // Move the offset by 3 bytes (2 for ttl_sdu_len and 1 for sdu_type)
-
-    // Deserialize the sdu
-    if (mip_pdu->mip_header.sdu_type == MIP_ARP) {
-        // Deserialize ARP message
-        mip_pdu->sdu.arp_msg_payload = (struct mip_arp_message*)malloc(ARP_SDU_SIZE);
-        memcpy(mip_pdu->sdu.arp_msg_payload, buffer + offset, ARP_SDU_SIZE);
-        offset += ARP_SDU_SIZE;
-    } else {
-        // Deserialize regular message payload
-        mip_pdu->sdu.message_payload = (char*)malloc(mip_pdu->mip_header.sdu_len);
-        memcpy(mip_pdu->sdu.message_payload, buffer + offset, mip_pdu->mip_header.sdu_len);
-        offset += mip_pdu->mip_header.sdu_len;
-    }
-
-    return mip_pdu;
 }
 struct mip_pdu* create_mip_pdu( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_mip_addr, char *message, uint8_t src_address, uint8_t ttl){
 
@@ -210,6 +130,156 @@ struct mip_pdu* create_mip_pdu( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_
     return NULL; //180
 
 }
+//forward packet to next hop
+int forward_engine(struct mip_pdu *pdu, uint8_t self_mip_addr, struct cache *cache, struct ifs_data* ifs, char *router_path) {
+    // Validate input
+    if (!pdu) {
+        perror("PDU is null");
+        return -1;
+    }
+
+    if (!pdu->sdu.message_payload) {
+        perror("Message payload is null");
+        return -1;
+    }
+
+    // Ask router for next hop
+    struct RoutingRequest RoutingRequest = create_routing_request(self_mip_addr, pdu->mip_header.dest_addr, 15);
+    char* payload = serialize_router_requests(RoutingRequest);
+    struct RoutingResponse *response = send_to_router_and_receive_response(router_path, payload);
+
+    if (!response) {
+        perror("Routing response is null");
+        free(payload);
+        return -1;
+    }
+
+    uint8_t next_hop = response->next_hop_mip_addr;
+    printf("NEXT HOP ADDR: %d \n", next_hop);
+
+    // Check cache for next hop's MAC address
+    struct entry *cache_entry = get_mac_from_cache(cache, next_hop);
+
+    if (!cache_entry || !cache_entry->mac_address || !cache_entry->if_addr) {
+        printf("MIP address not found in cache, sending ARP request \n");
+
+        // Create ARP PDU
+        struct mip_pdu *ping_pdu_to_store = create_mip_pdu(PING, REQUEST, pdu->mip_header.dest_addr, pdu->sdu.message_payload, self_mip_addr, 15);
+        struct mip_pdu *arp_pdu = create_mip_pdu(MIP_ARP, REQUEST, next_hop, pdu->sdu.message_payload, self_mip_addr, 4);
+
+        if (!ping_pdu_to_store || !arp_pdu) {
+            perror("Failed to create PDU");
+            free(payload);
+            return -1;
+        }
+
+        uint8_t broadcast_addr[] = BROADCAST_ADDRESS;
+
+        // Send ARP request over all interfaces
+        for (int i = 0; i < ifs->ifn; i++) {
+            printf("Sending ARP request on interface %d\n", i);
+            send_raw_packet(ifs->rsock[i], arp_pdu, broadcast_addr, &ifs->addr[i]);
+        }
+
+        // Add to cache and queue
+        add_to_cache(cache, next_hop, NULL, NULL);
+        add_pdu_to_queue(cache, next_hop, ping_pdu_to_store);
+        printf("PDU is added in waiting queue, will be sent when response is received\n");
+
+        // Free allocated memory
+        free(arp_pdu->sdu.arp_msg_payload);
+        free(arp_pdu);
+        free(payload);
+        return 0;
+    }
+
+    // MAC address found in cache, send PDU
+    printf("MIP address found in cache, sending message\n");
+    send_raw_packet(ifs->rsock[0], pdu, cache_entry->mac_address, cache_entry->if_addr);
+
+    free(payload);
+    return 1;
+}
+
+
+int send_to_router(char* sock_path, char* payload){
+        //todo add timeout to waiting for response
+    char *routerPath = malloc(strlen(sock_path) + strlen("_routingd") + 1); // +1 for null terminator
+    strcpy(routerPath,sock_path);
+    strcat(routerPath, "_routingd");
+    struct sockaddr_un *addr=malloc(sizeof(struct sockaddr_un));
+    int sock= setupUnixSocket(sock_path, addr);
+    unixSocket_connect(sock,routerPath,addr);
+    write(sock,payload,strlen(payload));
+    close(sock);
+    free(routerPath);
+    free(addr);
+    return 1;
+}
+
+
+//function for serializing pdu to be sent over raw sockets
+size_t serialize_pdu(struct mip_pdu *mip_pdu, char* buffer){
+
+    size_t offset = 0;
+    // Serialize the mip_header
+    buffer[offset++] = mip_pdu->mip_header.dest_addr;  // 1 byte for dest_addr
+    buffer[offset++] = mip_pdu->mip_header.src_addr;   // 1 byte for src_addr
+
+    // Doing micro management of bits
+    // Pack ttl (4 bits), sdu_len (9 bits), and sdu_type (3 bits) into 3 bytes
+    uint16_t ttl_sdu_len = (mip_pdu->mip_header.ttl << 12) |
+                           (mip_pdu->mip_header.sdu_len & 0x1FF);  // Pack ttl and sdu_len
+
+    buffer[offset++] = (ttl_sdu_len >> 8) & 0xFF;  // High byte of ttl_sdu_len
+    buffer[offset++] = ttl_sdu_len & 0xFF;         // Low byte of ttl_sdu_len
+    buffer[offset++] = (mip_pdu->mip_header.sdu_type & 0x07);  // 3 bits for sdu_type
+
+    // Now serialize the sdu 
+    if (mip_pdu->mip_header.sdu_type == MIP_ARP) {
+        // serialize ARP message
+        memcpy(buffer + offset, mip_pdu->sdu.arp_msg_payload, ARP_SDU_SIZE);
+        offset += ARP_SDU_SIZE;
+    } else  {
+        // Serialize regular message payload
+        memcpy(buffer + offset, mip_pdu->sdu.message_payload, mip_pdu->mip_header.sdu_len);
+        offset += mip_pdu->mip_header.sdu_len;
+    }
+
+    return offset;  // Return the total number of bytes serialized into the buffer
+}
+//function for deserializing pdu to be sent over raw sockets
+struct mip_pdu* deserialize_pdu(char* buffer, size_t length) {
+    struct mip_pdu* mip_pdu = (struct mip_pdu*)malloc(sizeof(struct mip_pdu));
+    size_t offset = 0;
+
+    // Deserialize the mip_header
+    mip_pdu->mip_header.dest_addr = buffer[offset++];   // 1 byte for dest_addr
+    mip_pdu->mip_header.src_addr = buffer[offset++];    // 1 byte for src_addr
+
+    // Extract ttl (4 bits), sdu_len (9 bits), and sdu_type (3 bits)
+    uint16_t ttl_sdu_len = (buffer[offset] << 8) | buffer[offset + 1];
+    mip_pdu->mip_header.ttl = (ttl_sdu_len >> 12) & 0x0F;  // 4 bits for TTL
+    mip_pdu->mip_header.sdu_len = ttl_sdu_len & 0x1FF;     // 9 bits for sdu_len
+    mip_pdu->mip_header.sdu_type = buffer[offset + 2] & 0x07;  // 3 bits for sdu_type
+    offset += 3;  // Move the offset by 3 bytes (2 for ttl_sdu_len and 1 for sdu_type)
+
+    // Deserialize the sdu
+    if (mip_pdu->mip_header.sdu_type == MIP_ARP) {
+        // Deserialize ARP message
+        mip_pdu->sdu.arp_msg_payload = (struct mip_arp_message*)malloc(ARP_SDU_SIZE);
+        memcpy(mip_pdu->sdu.arp_msg_payload, buffer + offset, ARP_SDU_SIZE);
+        offset += ARP_SDU_SIZE;
+    } else {
+        // Deserialize regular message payload
+        mip_pdu->sdu.message_payload = (char*)malloc(mip_pdu->mip_header.sdu_len);
+        memcpy(mip_pdu->sdu.message_payload, buffer + offset, mip_pdu->mip_header.sdu_len);
+        offset += mip_pdu->mip_header.sdu_len;
+    }
+
+    return mip_pdu;
+}
+
 int handle_arp(struct mip_pdu *mip_pdu, uint8_t *src_mac, struct cache *cache, uint8_t self_mip_addr, int raw_socket,struct sockaddr_ll *socket_name){
     uint8_t src_mac_addr[6] ;
     memcpy(src_mac_addr,src_mac,6);
@@ -259,7 +329,8 @@ int handle_arp(struct mip_pdu *mip_pdu, uint8_t *src_mac, struct cache *cache, u
             printf(" \n ================================= \n");
         }
 }
-int handle_ping(struct mip_pdu *mip_pdu, uint8_t *src_mac, struct cache *cache, uint8_t self_mip_addr, int raw_socket,struct sockaddr_ll *socket_name, char *socketPath){
+//TODO IMPLEMENT MULTIHOP FORWARDING
+int handle_ping(struct mip_pdu *mip_pdu, uint8_t *src_mac, struct cache *cache, uint8_t self_mip_addr, int raw_socket,struct sockaddr_ll *socket_name, char *socketPath,struct ifs_data* ifs ){
     uint8_t src_mac_addr[6] ;
     memcpy(src_mac_addr,src_mac,6);
     // IF THE PING MESSAGE IS PONG
@@ -312,8 +383,16 @@ int handle_ping(struct mip_pdu *mip_pdu, uint8_t *src_mac, struct cache *cache, 
 
             return 1; // Return to avoid infinite loop
         } 
-        else { // If the message is PING
-            // Send PONG back to the sender
+        else { // If the message is PING, 
+
+            //check if the packet is ours, else forward it
+            //if not our own mip addr, forward it
+            if(mip_pdu->mip_header.dest_addr!=self_mip_addr){   
+                //TODO FORWARD PACKET
+                forward_engine(mip_pdu,self_mip_addr,cache,ifs,socketPath);
+                return 1;
+            }
+            //If ours Send PONG back to the sender
             size_t message_len = strlen(mip_pdu->sdu.message_payload);  // Get the length of the message
             size_t buffer_size = sizeof(uint8_t) + message_len + 1;     // +1 for null terminator
 
@@ -321,9 +400,9 @@ int handle_ping(struct mip_pdu *mip_pdu, uint8_t *src_mac, struct cache *cache, 
             struct mip_client_payload *buffer_to_server = calloc(1, buffer_size);
             if (buffer_to_server == NULL) {
                 perror("malloc for buffer_to_server failed");
-                return -1;
+                return 1;    
             }
-
+            
             // Copy source address and message to buffer
             uint8_t src_addr = mip_pdu->mip_header.src_addr;
             buffer_to_server->dst_mip_addr = &src_addr;
@@ -462,7 +541,8 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
         printf("    -Received message from: %d  \n", mip_pdu->mip_header.src_addr);
         printf("    -Destination:  %d  \n", mip_pdu->mip_header.dest_addr);
         printf("    -Message: %s \n", mip_pdu->sdu.message_payload);
-        handle_ping(mip_pdu, src_mac_addr,cache,self_mip_addr,raw_socket,socket_name, socketPath);
+        //TODO implement proper ping packet forwarding
+        handle_ping(mip_pdu, src_mac_addr,cache,self_mip_addr,raw_socket,socket_name, socketPath,ifs);
     }
     //receiving router packet
     else if (mip_pdu->mip_header.sdu_type == ROUTER){

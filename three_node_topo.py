@@ -162,7 +162,14 @@ def init_threenode_with_gdb(self, line):
                                  args="-d usockC"))
 
     # Give time for routing daemons to converge
-    time.sleep(15)
+    time.sleep(30)
+
+    terms.append(openTermWithGDB(self,
+                          node=A,
+                          title="Client [A]",
+                          geometry="80x20+0+300",
+                          binary="./ping_client",
+                          args="usockA 30 \"Hello IN3230\""))
 
 # Mininet Callbacks
 CLI.do_init_threenode_with_gdb = init_threenode_with_gdb
