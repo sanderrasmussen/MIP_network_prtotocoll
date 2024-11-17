@@ -211,6 +211,58 @@ def init_twonode_with_client(self, line):
                           geometry="80x14+0+900",
                           cmd="./ping_client usockA 20 \"Hello from A\""))
 
+def init_twonode_with_client_and_server(self, line):
+    "Initialize both nodes with a client on Node A and a server on Node B"
+    net = self.mn
+    A = net.get('A')
+    B = net.get('B')
+
+    # Start MIP Daemon on Node A and Node B
+    terms.append(openTerm(self,
+                          node=A,
+                          title="MIP A",
+                          geometry="80x14+0+0",
+                          cmd="./mipd -d usockA 10"))
+
+    terms.append(openTerm(self,
+                          node=B,
+                          title="MIP B",
+                          geometry="80x14+0+450",
+                          cmd="./mipd -d usockB 20"))
+
+    # Sleep for 3 sec to ensure that the MIP daemons are ready
+    time.sleep(3)
+
+    # Start Routing Daemon on Node A and Node B
+    terms.append(openTerm(self,
+                          node=A,
+                          title="ROUTING A",
+                          geometry="80x14+0+210",
+                          cmd="./routingd -d usockA"))
+
+    terms.append(openTerm(self,
+                          node=B,
+                          title="ROUTING B",
+                          geometry="80x14+0+660",
+                          cmd="./routingd -d usockB"))
+
+    # Give time for routing daemons to converge
+    time.sleep(15)
+
+    # Start a server on Node B
+    terms.append(openTerm(self,
+                          node=B,
+                          title="Server [B]",
+                          geometry="80x14+0+900",
+                          cmd="./ping_server usockB"))
+
+    # Start a client on Node A
+    terms.append(openTerm(self,
+                          node=A,
+                          title="Client [A]",
+                          geometry="80x14+0+1200",
+                          cmd="./ping_client usockA 20 \"Hello from A to B\""))
+
 
 # Mininet Callbacks
 
@@ -219,6 +271,7 @@ CLI.do_init_twonode_with_gdb = init_twonode_with_gdb
 CLI.do_init_twonode_without_gdb = init_twonode_without_gdb
 CLI.do_init_twonode_with_client = init_twonode_with_client
 CLI.do_init_twonode_with_client_and_gdb = init_twonode_with_client_and_gdb
+CLI.do_init_twonode_with_client_and_server = init_twonode_with_client_and_server
 
 # Inside mininet console run 'EOF' to gracefully kill the mininet console
 orig_EOF = CLI.do_EOF

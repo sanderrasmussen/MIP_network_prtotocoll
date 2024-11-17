@@ -109,9 +109,15 @@ void handle_request(int unix_socket, struct routingTable *routingTable, char *mi
         printf("///// added %d to table \n", mip_addr);
         print_routing_table(routingTable);
     }
-    else if (strncmp(payload, "UPDATE", 6) == 0){
-        printf("ipdate \n");
-        //TODO IMPLEMENT UPDATE FUNCTIONALITY
+    else if (payload[0]==UPDATE){
+        //TODO IMPLEMENT receive UPDATE FUNCTIONALITY
+        //create update package and send to mips
+        //now we must compare our routes to the update message and update if we find less costly routes
+
+        //deserialize into update_message
+        struct update_message * update_msg = deserialize_update_message(payload);
+        update_table(routingTable,update_msg);
+        
     }
     //if request 
     else if (payload[2]==R && payload[3] == E && payload[4]== Q){

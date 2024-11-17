@@ -257,10 +257,26 @@ int send_arp_response(int rawSocket,  struct mip_pdu *received_pdu, size_t lengt
 int send_broadcast_message(int raw, struct ifs_data *ifs, struct mip_pdu* pdu){
     uint8_t broadcast_addr[] = BROADCAST_ADDRESS;
 
+     /* 
+        discovered a bug where helle pdu only gets forwrded to one interface due to ttl being decreased to 0 after being sent on ifs 0, 
+        therefore it cannot be sent to ifs 1
+        a quick fix is to create a new pdu everytime we send a broadcast to an interface
+    */
+
     // Send ARP over all interfaces
     for (int i = 0; i < ifs->ifn; i++) {
+        //quick fix, make i copies of pdu
+        struct mip_pdu* pdu_copy = malloc(sizeof(struct mip_pdu));
+        if (!pdu_copy) {
+            perror("Failed to allocate memory for pdu copy");
+            return -1;
+        }
+        memcpy(pdu_copy,pdu,sizeof(struct mip_pdu));
+
         printf("Sending ARP request on interface %d\n", i);
-        send_raw_packet(ifs->rsock[i], pdu, broadcast_addr, &ifs->addr[i]);
+        send_raw_packet(ifs->rsock[i], pdu_copy, broadcast_addr, &ifs->addr[i]);
+
+        free(pdu_copy);
     }     
     return 0;
 }

@@ -38,7 +38,20 @@ I tested this on nrec and it should work.*/
 int forward_engine(){
     return 0;
 }
-
+int send_to_router(char* sock_path, char* payload){
+        //todo add timeout to waiting for response
+    char *routerPath = malloc(strlen(sock_path) + strlen("_routingd") + 1); // +1 for null terminator
+    strcpy(routerPath,sock_path);
+    strcat(routerPath, "_routingd");
+    struct sockaddr_un *addr=malloc(sizeof(struct sockaddr_un));
+    int sock= setupUnixSocket(sock_path, addr);
+    unixSocket_connect(sock,routerPath,addr);
+    write(sock,payload,strlen(payload));
+    close(sock);
+    free(routerPath);
+    free(addr);
+    return 1;
+}
 struct RoutingResponse *send_to_router_and_receive_response(char *sock_path, char* payload){
     //todo add timeout to waiting for response
     char *routerPath = malloc(strlen(sock_path) + strlen("_routingd") + 1); // +1 for null terminator
@@ -357,7 +370,7 @@ int handle_ping(struct mip_pdu *mip_pdu, uint8_t *src_mac, struct cache *cache, 
             printf(" \n ================================= \n");
 
             // Free dynamically allocated memory
-            free(buffer_to_server); 
+            free(buffer_to_server);  
             free(recv_buff);
             free(pong_pdu->sdu.message_payload);
             free(pong_pdu);
@@ -376,7 +389,7 @@ int handle_router_package(struct mip_pdu *pdu ,int raw, uint8_t *src_mac, char* 
         // Create the path for the routing daemon socket
         char *routerPath = malloc(strlen(sock_path) + strlen("_routingd") + 1); // +1 for null terminator
         if (!routerPath) {
-            perror("malloc failed for routerPath");
+            perror("malloc failed for routerPath"); 
             return -1; // Handle error
         }
         strcpy(routerPath, sock_path);
@@ -423,9 +436,12 @@ int handle_router_package(struct mip_pdu *pdu ,int raw, uint8_t *src_mac, char* 
         free(payload);
     }
 
-    else if(strncmp(pdu->sdu.message_payload, "UPPDATE", 7) == 0){
+    else if(pdu->sdu.message_payload[0]==UPDATE){
         //uppdate routes
         printf("received update package \n");
+        //send update advertising to router to update tables
+        send_to_router(sock_path,pdu->sdu.message_payload);
+
     }
     else{
         printf(" UNVALID ROUTER PACKAGE\n");
@@ -447,6 +463,7 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
         printf("    -Message: %s \n", mip_pdu->sdu.message_payload);
         handle_ping(mip_pdu, src_mac_addr,cache,self_mip_addr,raw_socket,socket_name, socketPath);
     }
+    //receiving router packet
     else if (mip_pdu->mip_header.sdu_type == ROUTER){
         printf("received router package \n");
         handle_router_package(mip_pdu,raw_socket,src_mac_addr, socketPath );
@@ -475,6 +492,10 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
     if (strncmp(recv_buffer, "HELLO", 5) == 0){
         printf("\n ++++++Router wants to send HELLO messages to nearby hosts.++++++\n");
         //TODO create mip datagram to be sent to all neighbor hosts and wait for response and send back to router, then router will map neigbpurs
+        
+        /* discovered a bug where helle pdu only gets forwrded to one interface due to ttl being decreased to 0 after being sent on ifs 0, therefore it cannot be sent to ifs 1
+        a quick fix is to create a new pdu everytime we send a broadcast to an interface
+        */
         struct mip_pdu * pdu= create_mip_pdu(ROUTER,NULL,255,"HELLO\0",self_mip_addr,1);//ttl must be one since we only want to reach nearby nodes.
         //send arp package over all interfaces to all conneted hosts
         send_broadcast_message(raw_socket,ifs,pdu);
@@ -483,10 +504,13 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
         free(buffer);
         return 0;   
     }
-    else if (strncmp(recv_buffer, "UPPDATE", 7) == 0){
+    else if (recv_buffer[0]==UPDATE){
         printf("\n ++++++Router wants to send UPPDATE messages to nearby hosts.++++++\n");
+        //broadcast update to directly connected hosts
+        struct mip_pdu * pdu = create_mip_pdu(ROUTER, NULL, 255, recv_buffer, self_mip_addr,1);
+        send_broadcast_message(raw_socket,ifs,pdu);
+        printf("routes advertised\n");
         free(buffer);
-
         return 0;
     }
     else{
@@ -509,7 +533,7 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
 
         //we have the response, get the next hop and send package to next hop, hopefully the next host will forward the package further
         uint8_t next_hop = response->next_hop_mip_addr;
-        printf("///////////////// NEXT HOP ADDR: %d \n",next_hop);
+        printf("NEXT HOP ADDR: %d \n",next_hop);
 
 
         struct entry *cache_entry = get_mac_from_cache(cache, next_hop);// we will get the mac of next host and send it 

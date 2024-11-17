@@ -15,7 +15,13 @@ struct routingTable * create_routing_table() {
     }
     return table;
 }
-
+int update_table(struct routingTable *table,struct update_message* update){
+    //loop through all routes and compare to won, if better we uypdate our own
+    for(int i = 0; i<update->route_count; i++){
+        add_or_update_route(table, table->routes[i].dest, table->routes[i].next_hop, table->routes[i].cost);
+    }
+    return 1;
+}
 
 // Funksjon for å legge til eller oppdatere en rute i rutetabellen
 int add_or_update_route(struct routingTable *table, uint8_t dest, uint8_t next_hop, uint8_t cost) {
@@ -25,7 +31,7 @@ int add_or_update_route(struct routingTable *table, uint8_t dest, uint8_t next_h
             // Oppdaterer ruten hvis den eksisterer, og den nye kostnaden er lavere
             if (cost < table->routes[i].cost) {
                 table->routes[i].next_hop = next_hop;
-                table->routes[i].cost = cost;
+                table->routes[i].cost = table->routes[i].cost ;
                 return 1;  // Returnerer 1 for oppdatert rute
             }
             return 0;      // Ruten eksisterer allerede med samme eller lavere kostnad
@@ -47,7 +53,7 @@ int add_or_update_route(struct routingTable *table, uint8_t dest, uint8_t next_h
 // Funksjon for å fjerne en rute fra rutetabellen
 int remove_route(struct routingTable *table, uint8_t dest) {
     for (int i = 0; i < table->route_count; i++) {
-        if (table->routes[i].dest == dest) {
+        if (table->routes[i].dest == dest) {  
             // Fjerner ruten ved å flytte siste element inn her
             table->routes[i] = table->routes[table->route_count - 1];
             table->route_count--;
@@ -151,15 +157,15 @@ struct RoutingResponse create_routing_response(uint8_t src_addr, uint8_t next_ho
 //int update_routing_table(struct )
 
 char * serialize_update_message(struct update_message* update_message) {
-    // Beregn bufferstørrelsen: 1 byte for src_mip_addr + 2 bytes per rute (dest_mip_addr + cost)
-    size_t buffer_size =  1+ (update_message->route_count * 2) ;// route count + route array 
+    // Beregn bufferstørrelsen: first byte indicates it is an update package using "#define UPDATE 1"  1 byte for routecount + 2 bytes per rute (dest_mip_addr + cost)
+    size_t buffer_size =  1 + 1+ (update_message->route_count * 2) ;// route count + route array 
     char *buffer = malloc(buffer_size);
 
-    // Sett src_mip_addr i første byte av bufferet
-    buffer[0] = update_message->route_count;
-
+    int pos =0; 
+    // Sett update field i første byte av bufferet, derretter set route count
+    buffer[pos++] = update_message->packet_type;
+    buffer[pos++] = update_message->route_count;
     // Serialiser rutene
-    int pos = 1; // Start etter src_mip_addr
     for (int i = 0; i < update_message->route_count; i++) {
         buffer[pos++] = update_message->routes[i].dest_mip_addr; // Legg til destinasjons-MIP
         buffer[pos++] = update_message->routes[i].cost;          // Legg til kostnad
@@ -167,12 +173,28 @@ char * serialize_update_message(struct update_message* update_message) {
 
     return buffer; // Returnerer den serialiserte meldingen
 }
+struct update_message *deserialize_update_message(char * serialized_msg){
+    struct update_message *update_msg = malloc(sizeof(struct update_message));
+    int pos= 0;
+    update_msg->packet_type = serialized_msg[pos++];
+    update_msg->route_count = serialized_msg[pos++];
+    update_msg->routes= malloc(update_msg->route_count);
+
+    //deserialize routes
+    for (int i = 0; i < update_msg->route_count; i++) {
+        update_msg->routes[i].dest_mip_addr = serialized_msg[pos++]; // Legg til destinasjons-MIP
+        update_msg->routes[i].cost= serialized_msg[pos++];          // Legg til kostnad
+    }
+    return update_msg;
+}
 
 //fetches all routes and costs in table and creates a update_message struct and returns it
 struct update_message * create_update_message(struct routingTable *table) {
     
     struct update_message *update_msg = malloc(sizeof(struct update_message));
     update_msg->routes=  malloc(sizeof(struct update_entry)*(table->route_count));//we need mipaddr + routeCost
+
+    update_msg->packet_type=UPDATE;
 
     int next_pos = 0;
     for (int i = 0; i < table->route_count; i++) {
