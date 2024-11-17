@@ -88,7 +88,14 @@ def init_threenode_with_client(self, line):
                           cmd="./routingd -d usockC"))
 
     # Give time for routing daemons to converge
-    time.sleep(15)
+    time.sleep(30)
+
+    terms.append(openTerm(self,
+                          node=A,
+                          title="Client [A]",
+                          geometry="80x20+0+300",
+                          cmd="./ping_client usockA 30 \"Hello IN3230\""))
+    time.sleep(3)
 
 def openTermWithGDB(self, node, title, geometry, binary, args):
     display, tunnel = tunnelX11(node)

@@ -137,7 +137,7 @@ struct mip_pdu *fetch_queued_pdu_in_cache(struct cache *cache, uint8_t mip_addre
         }
         current = current->next;
     }
-
+    printf("--- No unsent pdu found in cache\n");
     return NULL;  // Return NULL if no unsent PDU exists
 }
 // Function to clear the cache and free memory
@@ -160,8 +160,6 @@ void clear_cache(struct cache *cache) {
         free(current);  // the cache entry
         current = next_entry;
     }
-
     cache->head = NULL;
     cache->tail = NULL;
-    
 }

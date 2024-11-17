@@ -252,7 +252,7 @@ int handle_arp(struct mip_pdu *mip_pdu, uint8_t *src_mac, struct cache *cache, u
                 }
 
                 send_raw_packet(raw_socket, unsent_pdu, src_mac_addr, socket_name);
-                printf(" Unsent pdu that was on hold is now sent \n");
+                printf("===== Unsent pdu that was on hold is now sent ====\n");
                 free(unsent_pdu->sdu.message_payload); 
                 free(unsent_pdu);  
             }
@@ -459,7 +459,8 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
     } 
     else if (mip_pdu->mip_header.sdu_type == PING) {
         printf(" \n ================================= \n");
-        printf("    -Received message from %d  \n", mip_pdu->mip_header.src_addr);
+        printf("    -Received message from: %d  \n", mip_pdu->mip_header.src_addr);
+        printf("    -Destination:  %d  \n", mip_pdu->mip_header.dest_addr);
         printf("    -Message: %s \n", mip_pdu->sdu.message_payload);
         handle_ping(mip_pdu, src_mac_addr,cache,self_mip_addr,raw_socket,socket_name, socketPath);
     }
@@ -512,7 +513,7 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
         char * serialized_update = serialize_update_message(update_msg);
         
         //
-        struct mip_pdu * pdu = create_mip_pdu(ROUTER, NULL, 255, serialized_update, self_mip_addr,1);\
+        struct mip_pdu * pdu = create_mip_pdu(ROUTER, NULL, 255, serialized_update, self_mip_addr,1);
         //broadcast update to directly connected hosts
         send_broadcast_message(raw_socket,ifs,pdu);
         printf("routes advertised\n");
@@ -559,8 +560,8 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
             }
 
             // Legg PDU i kø i påvente av ARP-svar
-            add_to_cache(cache, buffer->dst_mip_addr, NULL, NULL);
-            add_pdu_to_queue(cache, buffer->dst_mip_addr, ping_pdu_to_store);
+            add_to_cache(cache, next_hop, NULL, NULL);
+            add_pdu_to_queue(cache, next_hop, ping_pdu_to_store);
             printf("PDU is added in waiting queue, will be sent when response is received\n");
 
         } else {

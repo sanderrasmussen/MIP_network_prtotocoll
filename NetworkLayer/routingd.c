@@ -23,7 +23,7 @@
 
 
 #define HELLO_INTERVAL 10      // HELLO-melding hvert 10. sekund
-#define UPDATE_INTERVAL 30     // UPDATE-melding hvert 30. sekund
+#define UPDATE_INTERVAL 15     // UPDATE-melding hvert 30. sekund
 #define MAX_EVENTS 10          // Maks antall events vi kan håndtere samtidig
 
 
