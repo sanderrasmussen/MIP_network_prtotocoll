@@ -40,7 +40,7 @@ void send_update_message(  char* socket_path) ;
 // Funksjon for å sette opp en periodisk timer
 int setup_periodic_timer(int interval) ;
 // Funksjon for å håndtere innkommende forespørsler
-void handle_request(int unix_socket, struct routingTable *routingTable, char *mipd_path) ;
+int handle_request(int unix_socket, struct routingTable *routingTable, char *mipd_path) ;
 // Funksjon for å håndtere epoll-hendelser
 void handle_router_events(int epoll_fd, int unix_socket, int hello_timer_fd, int update_timer_fd, char * socket_path, char *mipd_socket_path, struct sockaddr_un *address, struct routingTable *routingTable) ;
 

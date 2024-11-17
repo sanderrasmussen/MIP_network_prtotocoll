@@ -45,8 +45,9 @@ struct RoutingResponse {
 };
 struct update_message {
     uint8_t packet_type;
+    uint8_t src_mip_addr;
     uint8_t route_count;
-    struct update_entry *routes;
+    struct update_entry *routes; //dest, and cost
    
 
 };
@@ -73,7 +74,7 @@ char * serialize_router_requests(struct RoutingRequest request);
 char * serialize_update_message(struct update_message* update_message) ;
 struct update_message *deserialize_update_message(char * serialized_msg);
 //fetches all routes and costs in table and creates a update_message struct and returns it
-struct update_message * create_update_message(struct routingTable *table) ;
+struct update_message * create_update_message(struct routingTable *table, uint8_t src_mip_addr) ;// set to 255 when in router, mipd will then change it to its own when relaying it
 int update_table(struct routingTable *table,struct update_message* update);
 
 #endif //end guard

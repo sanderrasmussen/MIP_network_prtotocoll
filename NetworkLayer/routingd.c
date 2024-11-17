@@ -96,12 +96,12 @@ int setup_periodic_timer(int interval) {
 }
 
 // Funksjon for å håndtere innkommende forespørsler
-void handle_request(int unix_socket, struct routingTable *routingTable, char *mipd_path) {
+int handle_request(int unix_socket, struct routingTable *routingTable, char *mipd_path) {
     printf("Handling incoming request...\n");
     // Implementer logikken for behandling av forespørsler her
     char *payload = malloc(100);
 
-    read(unix_socket, payload,strlen("UPDATE")+sizeof(uint8_t));
+    read(unix_socket, payload,200);
     if (strncmp(payload, "HELLO", 5) == 0){
         uint8_t mip_addr = *(uint8_t *)(payload + 5);
         printf("====== discovered new host %d ====== \n", mip_addr);
@@ -117,7 +117,7 @@ void handle_request(int unix_socket, struct routingTable *routingTable, char *mi
         //deserialize into update_message
         struct update_message * update_msg = deserialize_update_message(payload);
         update_table(routingTable,update_msg);
-        
+        return 1;
     }
     //if request 
     else if (payload[2]==R && payload[3] == E && payload[4]== Q){
@@ -126,6 +126,10 @@ void handle_request(int unix_socket, struct routingTable *routingTable, char *mi
         //find route
         printf("SEARCHING FOR ADDR %d \n", request->dest_mip_addr);
         uint8_t next_hop = get_next_hop(routingTable,request->ttl,request->dest_mip_addr);
+        if (next_hop==255){
+            printf("coukd not find next hop");
+            return -1;
+        }
         printf("NEXT HOP FOUND : %d\n", next_hop);
         // make response containign next hop.
         struct RoutingResponse response = create_routing_response(request->src_mip_addr,next_hop,1);
@@ -136,6 +140,7 @@ void handle_request(int unix_socket, struct routingTable *routingTable, char *mi
         //send_to_mipd(serialize_response, mipd_path);
         printf("RESPONSE SENT TO MIPD \n");
     }   
+    return 1;
     
 }
 
@@ -179,7 +184,7 @@ void handle_router_events(int epoll_fd, int unix_socket, int hello_timer_fd, int
 }
 int advertise_routes(struct routingTable * routingTable, char *socket_path){
     //map routes and create message
-    struct update_message *update_msg = create_update_message(routingTable);
+    struct update_message *update_msg = create_update_message(routingTable,255);//temp 255 becvause routerd does not know mip addr of mipd, mipd wil set the address in the packet
     //serialize and send to mipd
     char * serialized_update_msg=serialize_update_message(update_msg);
     //send to mips

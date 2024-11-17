@@ -493,9 +493,7 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
         printf("\n ++++++Router wants to send HELLO messages to nearby hosts.++++++\n");
         //TODO create mip datagram to be sent to all neighbor hosts and wait for response and send back to router, then router will map neigbpurs
         
-        /* discovered a bug where helle pdu only gets forwrded to one interface due to ttl being decreased to 0 after being sent on ifs 0, therefore it cannot be sent to ifs 1
-        a quick fix is to create a new pdu everytime we send a broadcast to an interface
-        */
+       
         struct mip_pdu * pdu= create_mip_pdu(ROUTER,NULL,255,"HELLO\0",self_mip_addr,1);//ttl must be one since we only want to reach nearby nodes.
         //send arp package over all interfaces to all conneted hosts
         send_broadcast_message(raw_socket,ifs,pdu);
@@ -506,8 +504,16 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
     }
     else if (recv_buffer[0]==UPDATE){
         printf("\n ++++++Router wants to send UPPDATE messages to nearby hosts.++++++\n");
+
+
+        //this is a quick fix:
+        struct update_message * update_msg = deserialize_update_message(recv_buffer);
+        update_msg->src_mip_addr = self_mip_addr;
+        char * serialized_update = serialize_update_message(update_msg);
+        
+        //
+        struct mip_pdu * pdu = create_mip_pdu(ROUTER, NULL, 255, serialized_update, self_mip_addr,1);\
         //broadcast update to directly connected hosts
-        struct mip_pdu * pdu = create_mip_pdu(ROUTER, NULL, 255, recv_buffer, self_mip_addr,1);
         send_broadcast_message(raw_socket,ifs,pdu);
         printf("routes advertised\n");
         free(buffer);
