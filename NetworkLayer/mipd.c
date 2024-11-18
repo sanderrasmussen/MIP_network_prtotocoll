@@ -415,8 +415,11 @@ int handle_ping(struct mip_pdu *mip_pdu, uint8_t *src_mac, struct cache *cache, 
                 free(buffer_to_server);
                 exit(EXIT_FAILURE);
             }
-            int unix_data_socket = setupUnixSocket(socketPath, address);
-            unixSocket_connect(unix_data_socket, socketPath, address);
+            char *server_path= malloc(strlen("UsockX_server\0"));
+            strcpy(server_path, socketPath);
+            strcat(server_path, "_server");
+            int unix_data_socket = setupUnixSocket(server_path, address);
+            unixSocket_connect(unix_data_socket, server_path, address);
             printf("\n-----------sending to server app---------------\n");
 
             int status = unixSocket_send(unix_data_socket, buffer_to_server, buffer_size);
@@ -453,6 +456,7 @@ int handle_ping(struct mip_pdu *mip_pdu, uint8_t *src_mac, struct cache *cache, 
             free(recv_buff);
             free(pong_pdu->sdu.message_payload);
             free(pong_pdu);
+            free(server_path);
             free(address);
         }
 }

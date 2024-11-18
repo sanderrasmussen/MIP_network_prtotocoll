@@ -100,14 +100,18 @@ int main(int argc, char *argv[]) {
     }
     printf("server started \n");
     
-    char *socket_path = argv[1];
+    char *server_sock_path= malloc(sizeof("UsockX_server\0")); //standard 
+    char *mipd_sock_path = argv[1];
+    strcpy(server_sock_path, mipd_sock_path);
+    strcat(server_sock_path, "_server");
+
     struct sockaddr_un address;
 
     int mask = umask(0);
-    unlink(socket_path);
-    int unix_socket = setupUnixSocket(socket_path, &address);
-    unixSocket_bind(unix_socket, socket_path, &address);
-    unixSocket_listen(unix_socket, socket_path, unix_socket);
+    unlink(server_sock_path);
+    int unix_socket = setupUnixSocket(server_sock_path, &address);
+    unixSocket_bind(unix_socket, server_sock_path, &address);
+    unixSocket_listen(unix_socket, server_sock_path, unix_socket);
     umask(mask);
 
     int epoll_fd = epoll_create1(0);

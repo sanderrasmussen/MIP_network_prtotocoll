@@ -86,6 +86,25 @@ def init_threenode_with_client(self, line):
                           title="ROUTING C",
                           geometry="80x14+300+900",
                           cmd="./routingd -d usockC"))
+    
+        # Start a server on Node B
+    terms.append(openTerm(self,
+                          node=A,
+                          title="Server [A]",
+                          geometry="80x14+0+900",
+                          cmd="./ping_server usockA"))
+        # Start a server on Node B
+    terms.append(openTerm(self,
+                          node=B,
+                          title="Server [B]",
+                          geometry="80x14+0+900",
+                          cmd="./ping_server usockB"))
+        # Start a server on Node B
+    terms.append(openTerm(self,
+                          node=C,
+                          title="Server [C]",
+                          geometry="80x14+0+900",
+                          cmd="./ping_server usockC"))
 
     # Give time for routing daemons to converge
     time.sleep(30)
@@ -169,7 +188,30 @@ def init_threenode_with_gdb(self, line):
                           title="Client [A]",
                           geometry="80x20+0+300",
                           binary="./ping_client",
-                          args="usockA 30 \"Hello IN3230\""))
+                          args="usockA 10 \"Hello IN3230\""))
+            # Start a server on Node B
+    terms.append(openTerm(self,
+                          node=A,
+                          title="Server [A]",
+                          geometry="80x14+0+900",
+                          binary="./ping_server",
+                          cmd="usockA"))
+
+    terms.append(openTerm(self,
+                          node=A,
+                          title="Server [B]",
+                          geometry="80x14+0+900",
+                          binary="./ping_server",
+                          cmd="usockB"))
+
+            # Start a server on Node B
+    terms.append(openTerm(self,
+                          node=A,
+                          title="Server [C]",
+                          geometry="80x14+0+900",
+                          binary="./ping_server",
+                          cmd="usockC"))
+
 
 # Mininet Callbacks
 CLI.do_init_threenode_with_gdb = init_threenode_with_gdb
