@@ -115,7 +115,7 @@ def init_threenode_with_client(self, line):
                     title="Client [A]",
                     geometry="80x20+0+300",
                     binary="./ping_client",
-                    args="usockA 30 \"Hello from A \""))
+                    args="usockA 30 \"Hello from A \" 8"))
     # Start a server on Node B
 
     terms.append(openTermWithGDB(self,
@@ -123,14 +123,14 @@ def init_threenode_with_client(self, line):
                         title="Client [B]",
                         geometry="80x20+0+300",
                         binary="./ping_client",
-                        args="usockB 10 \"Hello from B \""))
+                        args="usockB 10 \"Hello from B \" 8"))
         # Start a server on Node B
     terms.append(openTermWithGDB(self,
                 node=C,
                 title="Client [C]",
                 geometry="80x20+0+300",
                 binary="./ping_client",
-                args="usockC 10 \"Hello from C \""))
+                args="usockC 10 \"Hello from C \" 8"))
     time.sleep(3)
 
 def openTermWithGDB(self, node, title, geometry, binary, args):

@@ -20,7 +20,7 @@
 #define MAX_EVENTS 10
 
 // For sending ping message to mipd
-void send_ping_message( uint8_t dst_mip_addr, const char *message, char *socket_path) {
+void send_ping_message( uint8_t dst_mip_addr, const char *message, char *socket_path, uint8_t ttl) {
         // Setup Unix-socket for sending messages to the mipd
     struct sockaddr_un address;
     int unix_socket = setupUnixSocket(socket_path, &address);
@@ -29,8 +29,8 @@ void send_ping_message( uint8_t dst_mip_addr, const char *message, char *socket_
     struct mip_client_payload * payload=malloc(100);
     payload->dst_mip_addr = dst_mip_addr;
     payload->message = message;
-
-    status = unixSocket_send(unix_socket, payload, 100);
+    payload->ttl = ttl;
+    status = unixSocket_send(unix_socket, payload, strlen(payload->message)+(sizeof(uint8_t)*2));
     if(status==-1){
         perror("send");
         exit(EXIT_FAILURE);
@@ -79,20 +79,20 @@ void receive_pong(char * socket_path){
 /* Sadly i am unable to use the same socket as received in argument when receiving pong. The mipd is already listening on it and i have implemented
 it in a way where it does not serve only one client at a time, but using FIFO scheduling. Therefore i must make a new socket path: 3.g. usockAclient for receving pongs from mipd*/
 int main(int argc, char *argv[]) {
-    if (argc != 4 || strcmp(argv[1], "-h") == 0) {
+    if (argc != 5 || strcmp(argv[1], "-h") == 0) {
         printf("Usage: %s <socket_path> <dst_mip_addr> <message>\n", argv[0]);
         exit(EXIT_FAILURE);
     }
     printf("Started MIP application \n");
     char *socket_path = argv[1];
-
+    uint8_t ttl = argv[4]; 
     uint8_t dst_mip_addr = (uint8_t)atoi(argv[2]);
     char *message = malloc(99);
     strcpy(message, argv[3]); // this should null terminate the string 
 
 
     // Send ping to MIP daemon
-    send_ping_message( dst_mip_addr, message, socket_path);
+    send_ping_message( dst_mip_addr, message, socket_path,ttl );
     receive_pong(socket_path);
   
     return 0;

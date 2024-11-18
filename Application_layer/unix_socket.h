@@ -23,6 +23,7 @@
 struct mip_client_payload{
     uint8_t dst_mip_addr;
     char *message;
+    uint8_t ttl ; 
 };
 
     
