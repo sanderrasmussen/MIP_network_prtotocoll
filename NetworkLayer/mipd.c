@@ -331,6 +331,7 @@ int handle_arp(struct mip_pdu *mip_pdu, uint8_t *src_mac, struct cache *cache, u
 }
 //TODO IMPLEMENT MULTIHOP FORWARDING
 int handle_ping(struct mip_pdu *mip_pdu, uint8_t *src_mac, struct cache *cache, uint8_t self_mip_addr, int raw_socket,struct sockaddr_ll *socket_name, char *socketPath,struct ifs_data* ifs ){
+    printf("----------------------handling incomming ping message-------------------------------");
     uint8_t src_mac_addr[6] ;
     memcpy(src_mac_addr,src_mac,6);
     // IF THE PING MESSAGE IS PONG

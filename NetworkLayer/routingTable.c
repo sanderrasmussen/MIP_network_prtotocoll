@@ -3,6 +3,90 @@
 #include <stdint.h>
 #include <string.h>
 #include "routingTable.h"
+#include <sys/timerfd.h>
+#include <poll.h>
+
+#define ROUTE_TIMEOUT 30 // Maks tid uten oppdatering i sekunder
+
+int add_or_update_route(struct routingTable *table, uint8_t dest, uint8_t next_hop, uint8_t cost) {
+    time_t current_time = time(NULL); // Hent nåværende tid
+    for (int i = 0; i < table->route_count; i++) {
+        if (table->routes[i].dest == dest) {
+            // Oppdater ruten hvis kostnaden er lavere eller lik
+            if (cost <= table->routes[i].cost) {
+                table->routes[i].next_hop = next_hop;
+                table->routes[i].cost = cost;
+                table->routes[i].time_last_updated = current_time; // Oppdater tiden
+                return 1;  // Returner 1 for oppdatert rute
+            }
+            return 0;      // Ruten eksisterer allerede med samme eller lavere kostnad
+        }
+    }
+
+    // Legg til ny rute hvis destinasjonen ikke finnes i tabellen
+    if (table->route_count < MAX_ROUTES) {
+        table->routes[table->route_count].dest = dest;
+        table->routes[table->route_count].next_hop = next_hop;
+        table->routes[table->route_count].cost = cost;
+        table->routes[table->route_count].time_last_updated = current_time; // Sett tid
+        table->route_count++;
+        return 1;  // Returner 1 for ny rute
+    }
+    
+    return -1; // Tabell er full
+}
+
+
+void remove_stale_routes(struct routingTable *table) {
+    time_t current_time = time(NULL); // Nåværende tid
+
+    for (int i = 0; i < table->route_count; ) {
+        if (difftime(current_time, table->routes[i].time_last_updated) > ROUTE_TIMEOUT) {
+            // Fjern ruten hvis den er foreldet
+            printf("Removing stale route to %d\n", table->routes[i].dest);
+            table->routes[i] = table->routes[table->route_count - 1];
+            table->route_count--;
+        } else {
+            i++; // Gå til neste rute
+        }
+    }
+}
+
+
+void periodic_cleaner_with_timerfd(struct routingTable *table) {
+    int timer_fd = timerfd_create(CLOCK_MONOTONIC, 0);
+    if (timer_fd == -1) {
+        perror("timerfd_create");
+        return;
+    }
+
+    struct itimerspec timer_spec;
+    timer_spec.it_interval.tv_sec = 10; // Periodisk hver 10. sekund
+    timer_spec.it_interval.tv_nsec = 0;
+    timer_spec.it_value.tv_sec = 10;    // Start med 10 sekunder
+    timer_spec.it_value.tv_nsec = 0;
+
+    if (timerfd_settime(timer_fd, 0, &timer_spec, NULL) == -1) {
+        perror("timerfd_settime");
+        close(timer_fd);
+        return;
+    }
+
+    struct pollfd fds;
+    fds.fd = timer_fd;
+    fds.events = POLLIN;
+
+    while (1) {
+        int poll_result = poll(&fds, 1, -1);
+        if (poll_result > 0 && (fds.revents & POLLIN)) {
+            uint64_t expirations;
+            read(timer_fd, &expirations, sizeof(expirations)); // Nullstiller timer
+            remove_stale_routes(table);
+        }
+    }
+
+    close(timer_fd);
+}
 
 
 struct routingTable *create_routing_table() {
@@ -21,32 +105,7 @@ int update_table(struct routingTable *table,struct update_message* update){
     return 1;
 }
 
-// Funksjon for å legge til eller oppdatere en rute i rutetabellen
-int add_or_update_route(struct routingTable *table, uint8_t dest, uint8_t next_hop, uint8_t cost) {
-    // Sjekker om ruten eksisterer fra før
-    for (int i = 0; i < table->route_count; i++) {
-        if (table->routes[i].dest == dest) {
-            // Oppdaterer ruten hvis den eksisterer, og den nye kostnaden er lavere
-            if (cost < table->routes[i].cost) {
-                table->routes[i].next_hop = next_hop;
-                table->routes[i].cost = cost ;
-                return 1;  // Returnerer 1 for oppdatert rute
-            }
-            return 0;      // Ruten eksisterer allerede med samme eller lavere kostnad
-        }
-    }
 
-    // Legger til ny rute hvis destinasjonen ikke finnes i tabellen
-    if (table->route_count < MAX_ROUTES) {
-        table->routes[table->route_count].dest = dest;
-        table->routes[table->route_count].next_hop = next_hop;
-        table->routes[table->route_count].cost = cost;
-        table->route_count++;
-        return 1;  // Returnerer 1 for ny rute
-    }
-    
-    return -1; // Tabell er full
-}
 
 // Funksjon for å fjerne en rute fra rutetabellen
 int remove_route(struct routingTable *table, uint8_t dest) {

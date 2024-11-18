@@ -55,6 +55,7 @@ void send_hello_message(char *socket_path) {
         perror("unix socket send");
     }
     printf(" hello message sent \n");
+    
 }
 
 // Funksjon for å sende en UPDATE-melding
@@ -146,7 +147,7 @@ int handle_request(int unix_socket, struct routingTable *routingTable, char *mip
 
 
 // Funksjon for å håndtere epoll-hendelser
-void handle_router_events(int epoll_fd, int unix_socket, int hello_timer_fd, int update_timer_fd, char * socket_path, char *mipd_socket_path, struct sockaddr_un *address, struct routingTable *routingTable) {
+void handle_router_events(int epoll_fd, int unix_socket, int hello_timer_fd, int update_timer_fd, char * socket_path, char *mipd_socket_path, struct sockaddr_un *address, struct routingTable *routingTable, int remove_stale_timer) {
     struct epoll_event events[MAX_EVENTS];
     while (1) {
         int num_events = epoll_wait(epoll_fd, events, MAX_EVENTS, -1);
@@ -170,6 +171,7 @@ void handle_router_events(int epoll_fd, int unix_socket, int hello_timer_fd, int
                 uint64_t expirations;
                 read(hello_timer_fd, &expirations, sizeof(expirations)); // Tømmer timeren
                 send_hello_message(mipd_socket_path);
+                    print_routing_table(routingTable);
                 
             } else if (events[i].data.fd == update_timer_fd) {
                 // Timer for UPDATE utløpt - send UPDATE-melding
@@ -178,6 +180,14 @@ void handle_router_events(int epoll_fd, int unix_socket, int hello_timer_fd, int
                 advertise_routes(routingTable, mipd_socket_path);
                 //send_update_message(mipd_socket_path);
 
+            }
+            else if(events[i].data.fd == remove_stale_timer){
+                  // Timer for å fjerne utdaterte ruter utløst
+                uint64_t expirations;
+                read(remove_stale_timer, &expirations, sizeof(expirations)); // Tømmer timeren
+                printf("Checking for stale routes...\n");
+                remove_stale_routes(routingTable);
+                print_routing_table(routingTable); 
             }
         }
     }
@@ -200,22 +210,24 @@ int advertise_routes(struct routingTable * routingTable, char *socket_path){
     printf("UPPDATE message sent \n");
 
 }
-int main(int argc, char *argv[]) {
 
-    if (argc != 3 ) {
-        printf("Usage: routingd [-d] <socket_upper> ");
-        printf("exiting program now...");
+
+
+
+int main(int argc, char *argv[]) {
+    if (argc != 3) {
+        printf("Usage: routingd [-d] <socket_upper>\n");
         exit(EXIT_FAILURE);
     }
-    printf("routing daemon started\n");
-    char *mipd_socket_path= argv[2];
-    printf("socketPath %s ", mipd_socket_path);
-    char socket_path[sizeof(argv[2]) + sizeof("_routingd")];
-    strcpy(socket_path, argv[2]);
-    strcat(socket_path, "_routingd");
+
+    printf("Routing daemon started\n");
+    char *mipd_socket_path = argv[2];
+    printf("MIPD socket path: %s\n", mipd_socket_path);
+
+    char socket_path[strlen(argv[2]) + strlen("_routingd") + 1];
+    snprintf(socket_path, sizeof(socket_path), "%s_routingd", argv[2]);
 
     struct sockaddr_un address;
-
     int mask = umask(0);
     unlink(socket_path);
     int unix_socket = setupUnixSocket(socket_path, &address);
@@ -229,18 +241,18 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    // Legg til UNIX-socket i epoll
     struct epoll_event event;
     event.events = EPOLLIN;
-    event.data.fd = unix_socket;
 
+    // Legg til UNIX-socket i epoll
+    event.data.fd = unix_socket;
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, unix_socket, &event) == -1) {
-        perror("epoll_ctl");
+        perror("epoll_ctl (unix_socket)");
         close(unix_socket);
         exit(EXIT_FAILURE);
     }
 
-    // Sett opp HELLO-timer og legg den til epoll
+    // Periodiske tidtakere
     int hello_timer_fd = setup_periodic_timer(HELLO_INTERVAL);
     event.data.fd = hello_timer_fd;
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, hello_timer_fd, &event) == -1) {
@@ -250,7 +262,6 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    // Sett opp UPDATE-timer og legg den til epoll
     int update_timer_fd = setup_periodic_timer(UPDATE_INTERVAL);
     event.data.fd = update_timer_fd;
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, update_timer_fd, &event) == -1) {
@@ -260,18 +271,26 @@ int main(int argc, char *argv[]) {
         close(update_timer_fd);
         exit(EXIT_FAILURE);
     }
-    //init routing table 
-    struct routingTable * routingTable = create_routing_table();
-    //on startup we will send a hello message
+
+    int remove_stale_timer_fd = setup_periodic_timer(REMOVE_STALE_INTERVAL);
+    event.data.fd = remove_stale_timer_fd;
+    if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, remove_stale_timer_fd, &event) == -1) {
+        perror("epoll_ctl (remove_stale_timer_fd)");
+        close(unix_socket);
+        close(remove_stale_timer_fd);
+        exit(EXIT_FAILURE);
+    }
+
+    struct routingTable *routingTable = create_routing_table();
+
     send_hello_message(mipd_socket_path);
 
-    // Kjør hovedløkken for å håndtere hendelser
-    handle_router_events(epoll_fd, unix_socket, hello_timer_fd, update_timer_fd, socket_path ,mipd_socket_path,&address, routingTable);
-    // Lukk socket og tidtakere når vi er ferdige
+    handle_router_events(epoll_fd, unix_socket, hello_timer_fd, update_timer_fd, 
+                         socket_path, mipd_socket_path, &address, routingTable, remove_stale_timer_fd);
+
     close(unix_socket);
     close(hello_timer_fd);
     close(update_timer_fd);
-    
+    close(remove_stale_timer_fd);
     return 0;
 }
-

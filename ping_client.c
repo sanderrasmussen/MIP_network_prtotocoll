@@ -30,7 +30,7 @@ void send_ping_message( uint8_t dst_mip_addr, const char *message, char *socket_
     payload->dst_mip_addr = dst_mip_addr;
     payload->message = message;
 
-    int status = unixSocket_send(unix_socket, payload, 100);
+    status = unixSocket_send(unix_socket, payload, 100);
     if(status==-1){
         perror("send");
         exit(EXIT_FAILURE);

@@ -4,6 +4,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <time.h> 
 
 #define MAX_ROUTES 100       // Maks antall ruter som kan lagres
 #define INFINITY 16          // Definerer 'infinite' metrikk for DVR-protokollen 15 er den storste tillatte kostnaden for en rute
@@ -12,6 +13,7 @@ struct routeEntry{
     uint8_t next_hop;
     uint8_t dest;
     uint8_t cost;
+    time_t time_last_updated;
 };
 struct routingTable{
     struct routeEntry routes[MAX_ROUTES];
@@ -56,7 +58,7 @@ struct update_entry{
     uint8_t cost;
 };
 struct routingTable * create_routing_table() ;
-int add_or_update_route(struct routingTable *table, uint8_t dest, uint8_t next_hop, uint8_t cost) ;
+
 void print_routing_table(struct routingTable *table) ;
 void print_routing_table(struct routingTable *table) ;
 uint8_t get_next_hop(struct routingTable *table , uint8_t ttl, uint8_t dst_mip);
@@ -75,6 +77,17 @@ char * serialize_update_message(struct update_message* update_message) ;
 struct update_message *deserialize_update_message(char * serialized_msg);
 //fetches all routes and costs in table and creates a update_message struct and returns it
 struct update_message * create_update_message(struct routingTable *table, uint8_t src_mip_addr) ;// set to 255 when in router, mipd will then change it to its own when relaying it
+int update_table(struct routingTable *table,struct update_message* update);
+
+int add_or_update_route(struct routingTable *table, uint8_t dest, uint8_t next_hop, uint8_t cost) ;
+
+void remove_stale_routes(struct routingTable *table) ;
+
+
+void periodic_cleaner_with_timerfd(struct routingTable *table) ;
+
+struct routingTable *create_routing_table() ;
+
 int update_table(struct routingTable *table,struct update_message* update);
 
 #endif //end guard
