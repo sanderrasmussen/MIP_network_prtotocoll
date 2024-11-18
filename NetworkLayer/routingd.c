@@ -106,7 +106,7 @@ int handle_request(int unix_socket, struct routingTable *routingTable, char *mip
         uint8_t mip_addr = *(uint8_t *)(payload + 5);
         printf("====== discovered new host %d ====== \n", mip_addr);
         add_or_update_route(routingTable,mip_addr,mip_addr,1);
-        printf("///// added %d to table \n", mip_addr);
+        printf("    added %d to table \n", mip_addr);
         print_routing_table(routingTable);
     }
     else if (payload[0]==UPDATE){

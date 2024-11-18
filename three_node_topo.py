@@ -109,11 +109,28 @@ def init_threenode_with_client(self, line):
     # Give time for routing daemons to converge
     time.sleep(30)
 
-    terms.append(openTerm(self,
-                          node=A,
-                          title="Client [A]",
-                          geometry="80x20+0+300",
-                          cmd="./ping_client usockA 30 \"Hello IN3230\""))
+
+    terms.append(openTermWithGDB(self,
+                    node=A,
+                    title="Client [A]",
+                    geometry="80x20+0+300",
+                    binary="./ping_client",
+                    args="usockA 30 \"Hello from A \""))
+    # Start a server on Node B
+
+    terms.append(openTermWithGDB(self,
+                        node=B,
+                        title="Client [B]",
+                        geometry="80x20+0+300",
+                        binary="./ping_client",
+                        args="usockB 10 \"Hello from B \""))
+        # Start a server on Node B
+    terms.append(openTermWithGDB(self,
+                node=C,
+                title="Client [C]",
+                geometry="80x20+0+300",
+                binary="./ping_client",
+                args="usockC 10 \"Hello from C \""))
     time.sleep(3)
 
 def openTermWithGDB(self, node, title, geometry, binary, args):
@@ -183,13 +200,7 @@ def init_threenode_with_gdb(self, line):
     # Give time for routing daemons to converge
     time.sleep(30)
 
-    terms.append(openTermWithGDB(self,
-                          node=A,
-                          title="Client [A]",
-                          geometry="80x20+0+300",
-                          binary="./ping_client",
-                          args="usockA 10 \"Hello IN3230\""))
-            # Start a server on Node B
+
     terms.append(openTerm(self,
                           node=A,
                           title="Server [A]",
@@ -211,6 +222,28 @@ def init_threenode_with_gdb(self, line):
                           geometry="80x14+0+900",
                           binary="./ping_server",
                           cmd="usockC"))
+    
+    terms.append(openTermWithGDB(self,
+                        node=A,
+                        title="Client [A]",
+                        geometry="80x20+0+300",
+                        binary="./ping_client",
+                        args="usockA 10 \"Hello from A \""))
+        # Start a server on Node B
+
+    terms.append(openTermWithGDB(self,
+                        node=B,
+                        title="Client [B]",
+                        geometry="80x20+0+300",
+                        binary="./ping_client",
+                        args="usockB 20 \"Hello from B \""))
+        # Start a server on Node B
+    terms.append(openTermWithGDB(self,
+                node=C,
+                title="Client [C]",
+                geometry="80x20+0+300",
+                binary="./ping_client",
+                args="usockC 30 \"Hello from C \""))
 
 
 # Mininet Callbacks

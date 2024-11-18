@@ -20,7 +20,12 @@
 #define MAX_EVENTS 10
 
 // For sending ping message to mipd
-void send_ping_message(int unix_socket, uint8_t dst_mip_addr, const char *message) {
+void send_ping_message( uint8_t dst_mip_addr, const char *message, char *socket_path) {
+        // Setup Unix-socket for sending messages to the mipd
+    struct sockaddr_un address;
+    int unix_socket = setupUnixSocket(socket_path, &address);
+    int status = unixSocket_connect(unix_socket, socket_path, &address);
+
     struct mip_client_payload * payload=malloc(100);
     payload->dst_mip_addr = dst_mip_addr;
     payload->message = message;
@@ -33,39 +38,18 @@ void send_ping_message(int unix_socket, uint8_t dst_mip_addr, const char *messag
     printf("Ping message : %s sent \n ", message);
     printf("sent to : %d \n", dst_mip_addr);
     free(payload);
+    close(unix_socket);
 }
+void receive_pong(char * socket_path){
 
-
-/* Sadly i am unable to use the same socket as received in argument when receiving pong. The mipd is already listening on it and i have implemented
-it in a way where it does not serve only one client at a time, but using FIFO scheduling. Therefore i must make a new socket path: 3.g. usockAclient for receving pongs from mipd*/
-int main(int argc, char *argv[]) {
-    if (argc != 4 || strcmp(argv[1], "-h") == 0) {
-        printf("Usage: %s <socket_path> <dst_mip_addr> <message>\n", argv[0]);
-        exit(EXIT_FAILURE);
-    }
-    printf("Started MIP application \n");
-    char *socket_path = argv[1];
-    uint8_t dst_mip_addr = (uint8_t)atoi(argv[2]);
-    char *message = malloc(99);
-    strcpy(message, argv[3]); // this should null terminate the string 
-
-    struct sockaddr_un address;
-    // Setup Unix-socket for sending messages to the mipd
-    int unix_socket = setupUnixSocket(socket_path, &address);
-    int status = unixSocket_connect(unix_socket, socket_path, &address);
-    if (status == -1){
-        perror("connect client");
-    }
-    // Send ping to MIP daemon
-     send_ping_message(unix_socket, dst_mip_addr, message);
-    
     //closing the sending socket and creating a listening socket
     char *pong[200];
 
     //create new recv socket for listening to pongs :
-    char* recv_sock_path = malloc(14); //usockAclient
-    memcpy(recv_sock_path, socket_path, 6);
-    memcpy(recv_sock_path+6, "client\0",8);
+    char* recv_sock_path = malloc(strlen("usockX_client\0")); //usockAclient
+    memcpy(recv_sock_path, socket_path, strlen(socket_path));
+    strcat(recv_sock_path, "_client\0");
+    unlink(recv_sock_path);
     struct sockaddr_un recv_addr;
     int recv_sock = setupUnixSocket(recv_sock_path, &recv_addr);
     unixSocket_bind(recv_sock, recv_sock_path, &recv_addr);
@@ -90,6 +74,26 @@ int main(int argc, char *argv[]) {
     close(accept_sock);
     close(recv_sock);
     unlink(recv_sock_path);
+}
+
+/* Sadly i am unable to use the same socket as received in argument when receiving pong. The mipd is already listening on it and i have implemented
+it in a way where it does not serve only one client at a time, but using FIFO scheduling. Therefore i must make a new socket path: 3.g. usockAclient for receving pongs from mipd*/
+int main(int argc, char *argv[]) {
+    if (argc != 4 || strcmp(argv[1], "-h") == 0) {
+        printf("Usage: %s <socket_path> <dst_mip_addr> <message>\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+    printf("Started MIP application \n");
+    char *socket_path = argv[1];
+
+    uint8_t dst_mip_addr = (uint8_t)atoi(argv[2]);
+    char *message = malloc(99);
+    strcpy(message, argv[3]); // this should null terminate the string 
+
+
+    // Send ping to MIP daemon
+    send_ping_message( dst_mip_addr, message, socket_path);
+    receive_pong(socket_path);
   
     return 0;
 }

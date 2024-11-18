@@ -168,17 +168,17 @@ struct mip_pdu * recv_pdu_from_raw(int rawSocket, uint8_t *src_mac_addre){ // th
     pdu = deserialize_pdu(serilzd_pdu, pdu_length);
     free(serilzd_pdu);
     printf(" received packet from src mip addresse  : %d \n ",  pdu->mip_header.src_addr);
-    printf("/////////////////////\n");
+
     if(pdu->mip_header.sdu_type==MIP_ARP){
         printf(" mip Arp :who has : %d \n ", pdu->sdu.arp_msg_payload->address);
-    }
+    } 
     else if (pdu->mip_header.sdu_type==ROUTER){
     printf(" message : %s \n ", pdu->sdu.message_payload);
     }
       else if (pdu->mip_header.sdu_type==PING){
     printf(" message : %s \n ", pdu->sdu.message_payload);
     }
-    printf("////////\n");
+
     return pdu;
 }
 // Takes in pdu, serializes it to a buffer and sends it to the destination mac address over the network. Before calling this function, create a pdu and set pdu types. can be used when sending arps responses pings and so on.

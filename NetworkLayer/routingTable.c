@@ -65,7 +65,7 @@ uint8_t get_next_hop(struct routingTable *table , uint8_t ttl, uint8_t dst_mip){
     //simply loop and find route entry to destination
     for (int i = 0; i < table->route_count; i++){
         if (table->routes[i].dest == dst_mip && table->routes[i].cost <= ttl){
-            printf("'''''' fetchewd next hop: %d\n", table->routes[i].next_hop);
+            printf("    fetchewd next hop: %d\n", table->routes[i].next_hop);
             return table->routes[i].next_hop;//returning mip address
         }
     }
