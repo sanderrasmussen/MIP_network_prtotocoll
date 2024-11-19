@@ -253,7 +253,7 @@ int send_arp_response(int rawSocket,  struct mip_pdu *received_pdu, size_t lengt
 
     return 1;
 }
-
+// broadcasts to all direct neigbours
 int send_broadcast_message(int raw, struct ifs_data *ifs, struct mip_pdu* pdu){
     uint8_t broadcast_addr[] = BROADCAST_ADDRESS;
 

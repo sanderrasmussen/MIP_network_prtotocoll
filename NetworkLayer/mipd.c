@@ -53,17 +53,11 @@ struct RoutingResponse *send_to_router_and_receive_response(char *sock_path, cha
     free(addr);
     return response_deserialized;
 }
+//creating mip_pdu
 struct mip_pdu* create_mip_pdu( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_mip_addr, char *message, uint8_t src_address, uint8_t ttl){
 
     if(sdu_type==MIP_ARP){
 
-    /* HEADER: 
-     +--------------+-------------+---------+-----------+-----------+
-     | Dest. Addr.  | Src. Addr.  | TTL     | SDU Len.  | SDU type  |
-     +--------------+-------------+---------+-----------+-----------+
-     | 8 bits       | 8 bits      | 4 bits  | 9 bits    | 3 bits    |
-     +--------------+-------------+---------+-----------+-----------+
-     */
         struct mip_header *header = malloc(sizeof(struct mip_header));
         //filling the header values
         if (dst_mip_addr==NULL){
@@ -75,13 +69,7 @@ struct mip_pdu* create_mip_pdu( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_
         header->ttl= ttl; //recommended to set to one according to exam text, not yet decreased when reaching hosts
         header->sdu_type= sdu_type; //can be ping or arp, in this case it is arp
         header->sdu_len = sizeof(uint32_t);
-         /*if it is arp, then we know that the sdu len is only 32 bit because the payload is:
-                    +-------+-------------------------+-----------------------------+
-            | Type  | Address                 | Padding/ Reserved           |
-            +-------+-------------------------+-----------------------------+
-            | 0x00  | MIP address to look up  | Pad with 0x00 until 32 bits |
-            +-------+-------------------------+-----------------------------+
-        */
+        
         //adding the payload 
         struct mip_pdu* mip_pdu = malloc(sizeof(struct mip_header)+ header->sdu_len*sizeof(char));
         mip_pdu->sdu.arp_msg_payload = malloc(sizeof(struct mip_arp_message));
@@ -97,13 +85,7 @@ struct mip_pdu* create_mip_pdu( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_
     }
     else {
         //fill mip header
-         /* HEADER: 
-     +--------------+-------------+---------+-----------+-----------+
-     | Dest. Addr.  | Src. Addr.  | TTL     | SDU Len.  | SDU type  |
-     +--------------+-------------+---------+-----------+-----------+
-     | 8 bits       | 8 bits      | 4 bits  | 9 bits    | 3 bits    |
-     +--------------+-------------+---------+-----------+-----------+
-     */
+
         struct mip_header *header = malloc(sizeof(struct mip_header));
         //filling the header values
         if (dst_mip_addr==NULL){
@@ -127,7 +109,7 @@ struct mip_pdu* create_mip_pdu( uint8_t sdu_type, uint8_t arp_type, uint8_t dst_
         return mip_pdu; 
     }
 
-    return NULL; //180
+    return NULL; 
 
 }
 //forward packet to next hop
@@ -201,7 +183,7 @@ int forward_engine(struct mip_pdu *pdu, uint8_t self_mip_addr, struct cache *cac
     return 1;
 }
 
-
+// relays payload to router
 int send_to_router(char* sock_path, char* payload){
         //todo add timeout to waiting for response
     char *routerPath = malloc(strlen(sock_path) + strlen("_routingd") + 1); // +1 for null terminator
@@ -279,7 +261,7 @@ struct mip_pdu* deserialize_pdu(char* buffer, size_t length) {
 
     return mip_pdu;
 }
-
+// handles incomming arp
 int handle_arp(struct mip_pdu *mip_pdu, uint8_t *src_mac, struct cache *cache, uint8_t self_mip_addr, int raw_socket,struct sockaddr_ll *socket_name){
     uint8_t src_mac_addr[6] ;
     memcpy(src_mac_addr,src_mac,6);
@@ -329,7 +311,7 @@ int handle_arp(struct mip_pdu *mip_pdu, uint8_t *src_mac, struct cache *cache, u
             printf(" \n ================================= \n");
         }
 }
-//TODO IMPLEMENT MULTIHOP FORWARDING
+//handles ping messages
 int handle_ping(struct mip_pdu *mip_pdu, uint8_t *src_mac, struct cache *cache, uint8_t self_mip_addr, int raw_socket,struct sockaddr_ll *socket_name, char *socketPath,struct ifs_data* ifs ){
     printf("----------------------handling incomming ping message-------------------------------");
     uint8_t src_mac_addr[6] ;
@@ -461,6 +443,7 @@ int handle_ping(struct mip_pdu *mip_pdu, uint8_t *src_mac, struct cache *cache, 
             free(address);
         }
 }
+// for handling router packages
 int handle_router_package(struct mip_pdu *pdu ,int raw, uint8_t *src_mac, char* sock_path){
     uint8_t src_mac_addr[6];
     memcpy(src_mac_addr, src_mac,6);
@@ -546,7 +529,7 @@ int serve_raw_connection(int raw_socket, struct sockaddr_ll *socket_name, uint8_
         printf("    -Received message from: %d  \n", mip_pdu->mip_header.src_addr);
         printf("    -Destination:  %d  \n", mip_pdu->mip_header.dest_addr);
         printf("    -Message: %s \n", mip_pdu->sdu.message_payload);
-        //TODO implement proper ping packet forwarding
+
         handle_ping(mip_pdu, src_mac_addr,cache,self_mip_addr,raw_socket,socket_name, socketPath,ifs);
     }
     //receiving router packet
@@ -577,8 +560,6 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
     /* checking if it is a roputer hello message, first byte from client will always be a mip address so this should work.*/
     if (strncmp(recv_buffer, "HELLO", 5) == 0){
         printf("\n ++++++Router wants to send HELLO messages to nearby hosts.++++++\n");
-        //TODO create mip datagram to be sent to all neighbor hosts and wait for response and send back to router, then router will map neigbpurs
-        
        
         struct mip_pdu * pdu= create_mip_pdu(ROUTER,NULL,255,"HELLO\0",self_mip_addr,1);//ttl must be one since we only want to reach nearby nodes.
         //send arp package over all interfaces to all conneted hosts
@@ -591,13 +572,11 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
     else if (recv_buffer[0]==UPDATE){
         printf("\n ++++++Router wants to send UPPDATE messages to nearby hosts.++++++\n");
 
-
         //this is a quick fix:
         struct update_message * update_msg = deserialize_update_message(recv_buffer);
         update_msg->src_mip_addr = self_mip_addr;
         char * serialized_update = serialize_update_message(update_msg);
         
-        //
         struct mip_pdu * pdu = create_mip_pdu(ROUTER, NULL, 255, serialized_update, self_mip_addr,1);
         //broadcast update to directly connected hosts
         send_broadcast_message(raw_socket,ifs,pdu);
@@ -644,7 +623,7 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
                 send_raw_packet(ifs->rsock[i], pdu, broadcast_addr, &ifs->addr[i]);
             }
 
-            // Legg PDU i kø i påvente av ARP-svar
+            //add pdu to queue, will be sent on received arp response
             add_to_cache(cache, next_hop, NULL, NULL);
             add_pdu_to_queue(cache, next_hop, ping_pdu_to_store);
             printf("PDU is added in waiting queue, will be sent when response is received\n");
@@ -653,8 +632,6 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
             printf("MIP address found in cache, sending message\n");
             struct mip_pdu *pdu = create_mip_pdu(PING, REQUEST, buffer->dst_mip_addr, buffer->message, self_mip_addr,15);
 
-            //TODO REQUEST ROUTE FROM ROUTER AND SEND PACKAGE TO NEXT HOP. THEN NEXT HOP WILL FORWARD IT FURTHER
- 
             send_raw_packet(raw_socket, pdu, cache_entry->mac_address, cache_entry->if_addr);//sending raw paclet to next hop
 
         }
@@ -673,7 +650,7 @@ int serve_unix_connection(int sock_accept, int raw_socket, struct cache *cache, 
 // Listeneing on sockets and handling events on them
 void handle_events(int unix_socket, struct ifs_data *ifs, struct cache *cache, uint8_t self_mip_addr, char * socketPath) {
     int status, readyIOs;
-    struct epoll_event event, events[10]; // 10 er maks antall hendelser
+    struct epoll_event event, events[10]; 
     int epoll_fd = epoll_create1(0);
     int sock_accept;
     if (epoll_fd == -1) {
@@ -707,7 +684,7 @@ void handle_events(int unix_socket, struct ifs_data *ifs, struct cache *cache, u
                 serve_unix_connection(sock_accept, ifs->rsock[0], cache, self_mip_addr, ifs, socketPath);
                 //close(sock_accept);
             } else {
-                // Håndtere hendelser på raw sockets
+                
                 for (int j = 0; j < ifs->ifn; j++) {
                     if (events[i].data.fd == ifs->rsock[j]) {
                         serve_raw_connection(ifs->rsock[j], &(ifs->addr[j]), self_mip_addr, cache, ifs, unix_socket , socketPath);

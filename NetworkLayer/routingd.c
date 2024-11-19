@@ -22,11 +22,11 @@
 #include "routingd.h"
 
 
-#define HELLO_INTERVAL 10      // HELLO-melding hvert 10. sekund
-#define UPDATE_INTERVAL 15     // UPDATE-melding hvert 30. sekund
-#define MAX_EVENTS 10          // Maks antall events vi kan håndtere samtidig
+#define HELLO_INTERVAL 10      
+#define UPDATE_INTERVAL 15     
+#define MAX_EVENTS 10          
 
-
+// sendts payload to mipd
 int send_to_mipd(char * payload, char *mipd_path){
     struct sockaddr_un *addr = malloc(sizeof(struct sockaddr_un));
     int sock = setupUnixSocket(mipd_path, addr);
@@ -37,7 +37,7 @@ int send_to_mipd(char * payload, char *mipd_path){
 }
 
 
-// Funksjon for å sende en HELLO-melding
+// function for sending hello message 
 void send_hello_message(char *socket_path) {
     struct sockaddr_un address;
     printf("Sending HELLO message...\n");
@@ -58,22 +58,8 @@ void send_hello_message(char *socket_path) {
     
 }
 
-// Funksjon for å sende en UPDATE-melding
-void send_update_message(  char* socket_path) {
-    struct sockaddr_un address;
-    printf("Sending UPDATE message...\n");
-    int mipd_unix_socket = setupUnixSocket(socket_path, &address);
-    int status = unixSocket_connect(mipd_unix_socket, socket_path, &address);
-    if (status == -1){
-        perror("connect client");
-    }
-    char *payload = "UPPDATE\0";
-    unixSocket_send_String(mipd_unix_socket, payload, strlen(payload));
-    close(mipd_unix_socket);
-    printf("UPPDATE message sent \n");
-}
 
-// Funksjon for å sette opp en periodisk timer
+// setting up timer socket
 int setup_periodic_timer(int interval) {
     int timer_fd = timerfd_create(CLOCK_MONOTONIC, 0);
     if (timer_fd == -1) {
@@ -96,7 +82,7 @@ int setup_periodic_timer(int interval) {
     return timer_fd;
 }
 
-// Funksjon for å håndtere innkommende forespørsler
+// handling incomming requests on sockets
 int handle_request(int unix_socket, struct routingTable *routingTable, char *mipd_path) {
     printf("Handling incoming request...\n");
     // Implementer logikken for behandling av forespørsler her
@@ -111,9 +97,6 @@ int handle_request(int unix_socket, struct routingTable *routingTable, char *mip
         print_routing_table(routingTable);
     }
     else if (payload[0]==UPDATE){
-        //TODO IMPLEMENT receive UPDATE FUNCTIONALITY
-        //create update package and send to mips
-        //now we must compare our routes to the update message and update if we find less costly routes
 
         //deserialize into update_message
         struct update_message * update_msg = deserialize_update_message(payload);
@@ -146,7 +129,7 @@ int handle_request(int unix_socket, struct routingTable *routingTable, char *mip
 }
 
 
-// Funksjon for å håndtere epoll-hendelser
+// handles epoll events
 void handle_router_events(int epoll_fd, int unix_socket, int hello_timer_fd, int update_timer_fd, char * socket_path, char *mipd_socket_path, struct sockaddr_un *address, struct routingTable *routingTable, int remove_stale_timer) {
     struct epoll_event events[MAX_EVENTS];
     while (1) {
@@ -178,7 +161,7 @@ void handle_router_events(int epoll_fd, int unix_socket, int hello_timer_fd, int
                 uint64_t expirations;
                 read(update_timer_fd, &expirations, sizeof(expirations)); // Tømmer timeren
                 advertise_routes(routingTable, mipd_socket_path);
-                //send_update_message(mipd_socket_path);
+
 
             }
             else if(events[i].data.fd == remove_stale_timer){
@@ -192,6 +175,7 @@ void handle_router_events(int epoll_fd, int unix_socket, int hello_timer_fd, int
         }
     }
 }
+//sends routes to mipd so that it can advertise the routes
 int advertise_routes(struct routingTable * routingTable, char *socket_path){
     //map routes and create message
     struct update_message *update_msg = create_update_message(routingTable,255);//temp 255 becvause routerd does not know mip addr of mipd, mipd wil set the address in the packet
@@ -213,7 +197,7 @@ int advertise_routes(struct routingTable * routingTable, char *socket_path){
 
 
 
-
+// main function of routingd
 int main(int argc, char *argv[]) {
     if (argc != 3) {
         printf("Usage: routingd [-d] <socket_upper>\n");
@@ -244,7 +228,6 @@ int main(int argc, char *argv[]) {
     struct epoll_event event;
     event.events = EPOLLIN;
 
-    // Legg til UNIX-socket i epoll
     event.data.fd = unix_socket;
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, unix_socket, &event) == -1) {
         perror("epoll_ctl (unix_socket)");
@@ -252,7 +235,7 @@ int main(int argc, char *argv[]) {
         exit(EXIT_FAILURE);
     }
 
-    // Periodiske tidtakere
+    //timers
     int hello_timer_fd = setup_periodic_timer(HELLO_INTERVAL);
     event.data.fd = hello_timer_fd;
     if (epoll_ctl(epoll_fd, EPOLL_CTL_ADD, hello_timer_fd, &event) == -1) {

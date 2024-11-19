@@ -7,7 +7,7 @@
 #include <poll.h>
 
 #define ROUTE_TIMEOUT 30 // Maks tid uten oppdatering i sekunder
-
+//adds route if not already in table. if in table it checks if the new route is better and if it is the new route replaces the old
 int add_or_update_route(struct routingTable *table, uint8_t dest, uint8_t next_hop, uint8_t cost) {
     time_t current_time = time(NULL); // Hent nåværende tid
     for (int i = 0; i < table->route_count; i++) {
@@ -36,7 +36,7 @@ int add_or_update_route(struct routingTable *table, uint8_t dest, uint8_t next_h
     return -1; // Tabell er full
 }
 
-
+//for removing routes that has not been checked through incomming update and hello messages in a while
 void remove_stale_routes(struct routingTable *table) {
     time_t current_time = time(NULL); // Nåværende tid
 
@@ -52,7 +52,7 @@ void remove_stale_routes(struct routingTable *table) {
     }
 }
 
-
+// timer for removing stale routes through disconnected clients
 void periodic_cleaner_with_timerfd(struct routingTable *table) {
     int timer_fd = timerfd_create(CLOCK_MONOTONIC, 0);
     if (timer_fd == -1) {
@@ -88,14 +88,14 @@ void periodic_cleaner_with_timerfd(struct routingTable *table) {
     close(timer_fd);
 }
 
-
+// creates an empty routing table 
 struct routingTable *create_routing_table() {
     //initialize all routes with hops, cost=infinity, nexthop =255
     struct routingTable *table = malloc(sizeof(struct routingTable));
     table->route_count = 0; // Ingen oppføringer ved start
     return table;
 }
-
+// updates the table if the given update message contains any routes that are better than the routes already in the table
 int update_table(struct routingTable *table,struct update_message* update){
     //loop through all routes and compare to won, if better we uypdate our own
     struct update_entry * routes = update->routes;
@@ -140,7 +140,7 @@ void print_routing_table(struct routingTable *table) {
     }
 }
 
-
+// takes the buffer from mipd and deserializes it into a routing request
 struct RoutingRequest *deserialize_request(char * payload){
     struct RoutingRequest * res = malloc(sizeof(struct RoutingRequest));
     res->src_mip_addr = payload[0];
@@ -153,6 +153,7 @@ struct RoutingRequest *deserialize_request(char * payload){
     return res;
 
 }
+// takes the buffer from mipd and deserializes it into a routing response
 struct RoutingResponse *deserialize_response(char * payload){
     struct RoutingResponse* res = malloc(sizeof(struct RoutingResponse));
     res->src_mip_addr = payload[0];
@@ -165,6 +166,7 @@ struct RoutingResponse *deserialize_response(char * payload){
     return res;
 
 }
+// serializes a routing resposne to a buffer that can be sent to the mipd
 char *serialize_response(struct RoutingResponse response){
     char *buffer= malloc(sizeof(struct RoutingResponse));
     buffer[0]= response.src_mip_addr;
@@ -175,7 +177,7 @@ char *serialize_response(struct RoutingResponse response){
     buffer[5] = response.next_hop_mip_addr;
     return buffer;
 }
-
+// serializes a routing request to a buffer that can be sent to the mipd
 char * serialize_router_requests(struct RoutingRequest request){
     char *buffer= malloc(sizeof(struct RoutingRequest));
     buffer[0]= request.src_mip_addr;
@@ -210,9 +212,7 @@ struct RoutingResponse create_routing_response(uint8_t src_addr, uint8_t next_ho
     res.next_hop_mip_addr= next_hop;
     return res;
 }
-
-//int update_routing_table(struct )
-
+// takes a given update message and serializes it into a buffer to be sent to the mipd
 char * serialize_update_message(struct update_message* update_message) {
     // Beregn bufferstørrelsen: first byte indicates it is an update package using "#define UPDATE 1"  1 byte for routecount + 2 bytes per rute (dest_mip_addr + cost)
     size_t buffer_size =  1 + 1+ 1+(update_message->route_count * 2) ;// src addr + packetType + route count + route array 
@@ -231,6 +231,7 @@ char * serialize_update_message(struct update_message* update_message) {
 
     return buffer; // Returnerer den serialiserte meldingen
 }
+// deserializes a buffer from mipd into a update message struct which is then returned
 struct update_message *deserialize_update_message(char * serialized_msg){
     struct update_message *update_msg = malloc(sizeof(struct update_message));
     int pos= 0; //skipping the UPDATE packet type field
